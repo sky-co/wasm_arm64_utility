@@ -72,7 +72,7 @@
       <label for="machine-code">32-bit instruction word</label>
       <input id="machine-code" value="0xD10043FFU" spellcheck="false">
       <p class="hint">Enter 8 hexadecimal digits, optionally prefixed with 0x and suffixed with U. Automatically converts to little-endian bytes.</p>
-      <div class="actions"><button id="disassemble">Disassembler</button></div>
+      <div class="actions"><button id="disassemble">disassembler</button></div>
       <pre id="disassemble-output" role="status" aria-live="polite">Ready to disassemble.</pre>
     </section>
     <section>
@@ -80,7 +80,7 @@
       <label for="instruction">Single assembly instruction</label>
       <input id="instruction" value="sub sp, sp, #0x10" spellcheck="false">
       <p class="hint">Uses llvm-mc to display little-endian bytes and the 32-bit instruction word with a U suffix.</p>
-      <div class="actions"><button id="assemble">Assembler</button></div>
+      <div class="actions"><button id="assemble">assembler</button></div>
       <pre id="assemble-output" role="status" aria-live="polite">Ready to assemble.</pre>
     </section>
     <section class="binary-translator" aria-labelledby="binary-title">
@@ -106,7 +106,7 @@
         <label for="radix-binary">Binary</label>
         <input id="radix-binary" value="0000 0000 0000 0000 0000 0000 0000 0000" inputmode="numeric" spellcheck="false" autocomplete="off" aria-describedby="radix-hint radix-status">
       </div>
-      <div class="actions"><button id="radix-convert">Convert</button><button id="radix-reset">reset</button></div>
+      <div class="actions"><button id="radix-convert">convert</button><button id="radix-reset">reset</button></div>
       <p id="radix-status" class="radix-status" role="status" aria-live="polite">32 bits; binary grouped by four. No server required.</p>
     </section>
   </div>

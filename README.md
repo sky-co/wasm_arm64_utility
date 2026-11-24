@@ -44,12 +44,12 @@ Keep all commands on PATH. No npm packages, Python, QEMU, or ARM64 hardware requ
 | --- | --- | --- |
 | **wast2json** | `Chapter02/local.wast` | `.json` and numbered `.wasm` files |
 | **wasm-objdump** | Select a module or enter a Wasm path/URL | Disassembly and details (`-d -x`) |
-| **Assembler** | `sub sp, sp, #0x10` | `0xD10043FFU`; bytes `FF 43 00 D1` |
-| **Disassembler** | `0xD10043FFU` | AArch64 disassembly; bytes `FF 43 00 D1` |
+| **assembler** | `sub sp, sp, #0x10` | `0xD10043FFU`; bytes `FF 43 00 D1` |
+| **disassembler** | `0xD10043FFU` | AArch64 disassembly; bytes `FF 43 00 D1` |
 | **AArch64 Binary to Hex** → **translate** | `1101 0001 0000 0000 0100 0011 1111 1111` | `0xD10043FF` |
 | **reset** | Any bit values | All bits cleared; `0x00000000` |
-| **Base Converter** → **Convert** | Hex field: `0xD10043FF` | Decimal `3506455551`; binary `1101 0001 0000 0000 0100 0011 1111 1111` |
-| **Base Converter** → **Convert** | Decimal field: `16`, or binary field: `0001 0000` | Hex `0x00000010`; decimal `16`; binary `0000 0000 0000 0000 0000 0000 0001 0000` |
+| **Base Converter** → **convert** | Hex field: `0xD10043FF` | Decimal `3506455551`; binary `1101 0001 0000 0000 0100 0011 1111 1111` |
+| **Base Converter** → **convert** | Decimal field: `16`, or binary field: `0001 0000` | Hex `0x00000010`; decimal `16`; binary `0000 0000 0000 0000 0000 0000 0001 0000` |
 | **Base Converter** → **reset** | Any values in Hex/Decimal/Binary | Hex `0x00000000`; decimal `0`; binary `0000 0000 0000 0000 0000 0000 0000 0000` |
 
 ### Wasm workflow
@@ -64,10 +64,10 @@ Local conversion may overwrite outputs beside the source; remote files use tempo
 
 ### AArch64 tips
 
-- **Assembler:** one instruction only; no pseudo-instructions or unresolved symbols.
+- **assembler:** one instruction only; no pseudo-instructions or unresolved symbols.
 - **Binary to Hex:** enter one `0` or `1` per field, ordered bit 31 to bit 0. Output is an instruction value, not little-endian bytes.
 - For a few set bits: **reset** → edit bits → **translate**. Re-translate after edits; empty or invalid fields are flagged.
-- **Base Converter:** edit any of the three fields, then click **Convert** to update all three using the last edited field. Unsigned 32-bit range: `0–4294967295`; invalid or overflowing values show an error.
+- **Base Converter:** edit any of the three fields, then click **convert** to update all three using the last edited field. Unsigned 32-bit range: `0–4294967295`; invalid or overflowing values show an error.
 - **Base Converter reset:** click **reset** to clear validation and set Hex/Decimal/Binary back to `0`.
 - Hex accepts an optional `0x` prefix and displays `0x` + eight uppercase digits. Binary accepts spaces and displays 32 bits in four-bit groups.
 - **Binary to Hex** and **Base Converter** also work offline via `file://`; other tools require the server.
