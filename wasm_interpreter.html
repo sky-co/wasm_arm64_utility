@@ -106,7 +106,7 @@
         <label for="radix-binary">Binary</label>
         <input id="radix-binary" value="0000 0000 0000 0000 0000 0000 0000 0000" inputmode="numeric" spellcheck="false" autocomplete="off" aria-describedby="radix-hint radix-status">
       </div>
-      <div class="actions"><button id="radix-convert">Convert</button></div>
+      <div class="actions"><button id="radix-convert">Convert</button><button id="radix-reset">reset</button></div>
       <p id="radix-status" class="radix-status" role="status" aria-live="polite">32 bits; binary grouped by four. No server required.</p>
     </section>
   </div>
@@ -207,6 +207,14 @@
       $('radix-decimal').value = number.toString(10);
       $('radix-binary').value = number.toString(2).padStart(32, '0').match(/.{4}/g).join(' ');
       display('radix-status', 'Converted. Hex and binary are padded to 32 bits.');
+    });
+    $('radix-reset').addEventListener('click', () => {
+      radixSource = 'hex';
+      for (const field of radixFields) $(`radix-${field}`).removeAttribute('aria-invalid');
+      $('radix-hex').value = '0x00000000';
+      $('radix-decimal').value = '0';
+      $('radix-binary').value = '0000 0000 0000 0000 0000 0000 0000 0000';
+      display('radix-status', 'Reset to 0.');
     });
     const nibbleOutputs = [];
     for (let high = 31; high >= 3; high -= 4) {
