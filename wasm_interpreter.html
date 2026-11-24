@@ -7,37 +7,47 @@
   <style>
     :root { color-scheme: light; font-family: system-ui, sans-serif; color: #17243b; background: #f0f4fa; }
     * { box-sizing: border-box; }
-    body { margin: 0 auto; max-width: 1440px; padding: 28px; }
+    body { margin: 0 auto; max-width: 1440px; padding: 20px; }
     h1 { margin: 0 0 8px; font-size: 28px; }
-    h2 { margin: 0 0 16px; font-size: 19px; }
+    h2 { margin: 0 0 12px; font-size: 18px; }
     p, label { line-height: 1.6; }
     .intro, .hint { color: #526179; }
-    .grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 20px; }
-    section { padding: 22px; background: white; border: 1px solid #d6dfec; border-radius: 12px; }
+    .grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; }
+    section { min-width: 0; padding: 16px; background: white; border: 1px solid #d6dfec; border-radius: 10px; }
     label { display: block; margin: 12px 0 6px; font-weight: 600; }
     input, select, textarea { width: 100%; padding: 10px; border: 1px solid #9aabc2; border-radius: 6px; font: 14px ui-monospace, monospace; }
     textarea { min-height: 76px; resize: vertical; }
     button { padding: 10px 16px; border: 0; border-radius: 6px; background: #1958bb; color: white; cursor: pointer; font-weight: 600; }
     button:disabled { opacity: .5; cursor: wait; }
-    .actions { display: flex; flex-wrap: wrap; gap: 10px; margin: 14px 0; align-items: center; }
-    pre { margin: 12px 0 0; padding: 14px; min-height: 90px; max-height: 380px; overflow: auto; white-space: pre-wrap; overflow-wrap: anywhere; background: #101d32; color: #deebff; border-radius: 6px; font: 13px/1.6 ui-monospace, monospace; }
+    .actions { display: flex; flex-wrap: wrap; gap: 8px; margin: 10px 0; align-items: center; }
+    pre { margin: 10px 0 0; padding: 12px; min-height: 64px; max-height: 380px; overflow: auto; white-space: pre-wrap; overflow-wrap: anywhere; background: #101d32; color: #deebff; border-radius: 6px; font: 13px/1.6 ui-monospace, monospace; }
     pre.error { color: #ffb9b9; }
     .hint { font-size: 13px; margin-bottom: 0; overflow-wrap: anywhere; }
-    .binary-translator { grid-column: 1 / -1; }
-    .bit-groups { display: grid; grid-template-columns: repeat(8, minmax(0, 1fr)); gap: 12px; margin-top: 16px; }
+    .binary-translator, .radix-converter { grid-column: 1 / -1; }
+    .radix-row { display: grid; grid-template-columns: 80px minmax(0, 1fr); gap: 8px; align-items: center; margin-top: 8px; }
+    .radix-row label { margin: 0; }
+    .radix-row input { min-width: 0; }
+    input[aria-invalid="true"] { border-color: #b42318; }
+    .radix-status { margin: 8px 0 0; font-size: 13px; color: #526179; }
+    .radix-status.error { color: #b42318; }
+    .bit-groups { display: grid; grid-template-columns: repeat(8, minmax(0, 1fr)); gap: 8px; margin-top: 12px; }
     .bit-group { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 4px; padding: 8px; border: 1px solid #d6dfec; border-radius: 6px; }
     .bit-group label { margin: 0; text-align: center; font: 12px/1.6 ui-monospace, monospace; color: #526179; }
     .bit-group input { padding: 8px 0; text-align: center; }
-    .bit-group input[aria-invalid="true"] { border-color: #b42318; }
     .nibble-hex { grid-column: 1 / -1; text-align: center; padding-top: 8px; font: 600 18px ui-monospace, monospace; }
     @media (max-width: 1200px) { .bit-groups { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
     @media (max-width: 800px) { body { padding: 16px; } .grid { grid-template-columns: 1fr; } }
-    @media (max-width: 500px) { .bit-groups { grid-template-columns: 1fr; } }
+    @media (max-width: 600px) {
+      .radix-converter { padding: 12px; }
+      .radix-row { grid-template-columns: minmax(0, 1fr); margin-top: 12px; }
+      .radix-row input { grid-column: 1 / -1; grid-row: 2; padding: 8px 4px; font-size: clamp(10px, 2.4vw, 14px); }
+    }
+    @media (max-width: 500px) { .bit-groups { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
   </style>
 </head>
 <body>
   <h1>WebAssembly / AArch64 Toolbox</h1>
-  <p class="intro">WAST conversion, Wasm disassembly, and AArch64 assembly/disassembly. Connects only to the local service.</p>
+  <p class="intro">Wasm inspection, AArch64 assembly/disassembly, and 32-bit number conversion.</p>
   <div class="grid">
     <section>
       <h2>1. wast2json</h2>
@@ -75,11 +85,29 @@
     </section>
     <section class="binary-translator" aria-labelledby="binary-title">
       <h2 id="binary-title">5. AArch64 Binary to Hex</h2>
-      <p class="hint" id="binary-hint">Enter one 0 or 1 in every box, then click translate. Bits run from 31 (most significant) to 0 (least significant), matching the ARM encoding diagrams. Each group of four bits produces one hexadecimal digit.</p>
+      <p class="hint" id="binary-hint">Enter 0 or 1 per box, from bit 31 to bit 0, then click translate. Four bits = one hex digit.</p>
       <div id="bit-groups" class="bit-groups" role="group" aria-label="32-bit instruction" aria-describedby="binary-hint"></div>
       <div class="actions"><button id="translate">translate</button><button id="reset">reset</button></div>
       <label id="binary-output-label">32-bit instruction word (hexadecimal)</label>
       <pre id="binary-output" role="status" aria-live="polite" aria-labelledby="binary-output-label">Fill all 32 bits and click translate.</pre>
+    </section>
+    <section class="radix-converter" aria-labelledby="radix-title">
+      <h2 id="radix-title">6. 32-bit Base Converter</h2>
+      <p class="hint" id="radix-hint">Unsigned: 0-4294967295. Edit any field, then click Convert. The last edited field is the source.</p>
+      <div class="radix-row">
+        <label for="radix-hex">Hex</label>
+        <input id="radix-hex" value="0x00000000" spellcheck="false" autocomplete="off" aria-describedby="radix-hint radix-status">
+      </div>
+      <div class="radix-row">
+        <label for="radix-decimal">Decimal</label>
+        <input id="radix-decimal" value="0" inputmode="numeric" spellcheck="false" autocomplete="off" aria-describedby="radix-hint radix-status">
+      </div>
+      <div class="radix-row">
+        <label for="radix-binary">Binary</label>
+        <input id="radix-binary" value="0000 0000 0000 0000 0000 0000 0000 0000" inputmode="numeric" spellcheck="false" autocomplete="off" aria-describedby="radix-hint radix-status">
+      </div>
+      <div class="actions"><button id="radix-convert">Convert</button></div>
+      <p id="radix-status" class="radix-status" role="status" aria-live="polite">32 bits; binary grouped by four. No server required.</p>
     </section>
   </div>
   <script>
@@ -135,6 +163,50 @@
     bind('assemble', 'assemble-output', async () => {
       const result = await api('assemble', { instruction: $('instruction').value });
       display('assemble-output', `Little-endian bytes: ${result.bytes}\nInstruction word: ${result.word}\n\n${result.output}`);
+    });
+    const radixFields = ['hex', 'decimal', 'binary'];
+    function parseRadix(value, base) {
+      const text = value.trim();
+      let digits;
+      if (base === 'hex' && /^(?:0x)?[0-9a-f]+$/i.test(text)) {
+        digits = text.replace(/^0x/i, '');
+      } else if (base === 'decimal' && /^[0-9]+$/.test(text)) {
+        digits = text;
+      } else if (base === 'binary' && /^[01]+(?: +[01]+)*$/.test(text)) {
+        digits = text.replace(/ /g, '');
+      } else {
+        throw new Error(`Invalid ${base} value. Use digits only${base === 'hex' ? ' (optional 0x prefix)' : base === 'binary' ? ' (spaces allowed between groups)' : ''}.`);
+      }
+      const number = Number.parseInt(digits, { hex: 16, decimal: 10, binary: 2 }[base]);
+      if (!Number.isSafeInteger(number) || number > 0xFFFFFFFF) {
+        throw new Error('Value must be an unsigned 32-bit integer (0-4294967295).');
+      }
+      return number;
+    }
+    let radixSource = 'hex';
+    for (const base of radixFields) {
+      const input = $(`radix-${base}`);
+      input.addEventListener('input', () => {
+        radixSource = base;
+        for (const field of radixFields) $(`radix-${field}`).removeAttribute('aria-invalid');
+        display('radix-status', `Source: ${base}. Click Convert to update all fields.`);
+      });
+    }
+    bind('radix-convert', 'radix-status', () => {
+      const input = $(`radix-${radixSource}`);
+      for (const field of radixFields) $(`radix-${field}`).removeAttribute('aria-invalid');
+      let number;
+      try {
+        number = parseRadix(input.value, radixSource);
+      } catch (error) {
+        input.setAttribute('aria-invalid', 'true');
+        input.focus();
+        throw error;
+      }
+      $('radix-hex').value = `0x${number.toString(16).toUpperCase().padStart(8, '0')}`;
+      $('radix-decimal').value = number.toString(10);
+      $('radix-binary').value = number.toString(2).padStart(32, '0').match(/.{4}/g).join(' ');
+      display('radix-status', 'Converted. Hex and binary are padded to 32 bits.');
     });
     const nibbleOutputs = [];
     for (let high = 31; high >= 3; high -= 4) {

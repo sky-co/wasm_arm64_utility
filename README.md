@@ -1,6 +1,6 @@
 # WebAssembly / AArch64 Toolkit
 
-Browser-based tools for Wasm inspection, AArch64 assembly/disassembly, and binary-to-hex conversion.
+Browser-based tools for Wasm inspection, AArch64 assembly/disassembly, and 32-bit base conversion.
 
 ## Quick start
 
@@ -48,6 +48,8 @@ Keep all commands on PATH. No npm packages, Python, QEMU, or ARM64 hardware requ
 | **Disassembler** | `0xD10043FFU` | AArch64 disassembly; bytes `FF 43 00 D1` |
 | **AArch64 Binary to Hex** → **translate** | `1101 0001 0000 0000 0100 0011 1111 1111` | `0xD10043FF` |
 | **reset** | Any bit values | All bits cleared; `0x00000000` |
+| **Base Converter** → **Convert** | Hex field: `0xD10043FF` | Decimal `3506455551`; binary `1101 0001 0000 0000 0100 0011 1111 1111` |
+| **Base Converter** → **Convert** | Decimal field: `16`, or binary field: `0001 0000` | Hex `0x00000010`; decimal `16`; binary `0000 0000 0000 0000 0000 0000 0001 0000` |
 
 ### Wasm workflow
 
@@ -64,7 +66,9 @@ Local conversion may overwrite outputs beside the source; remote files use tempo
 - **Assembler:** one instruction only; no pseudo-instructions or unresolved symbols.
 - **Binary to Hex:** enter one `0` or `1` per field, ordered bit 31 to bit 0. Output is an instruction value, not little-endian bytes.
 - For a few set bits: **reset** → edit bits → **translate**. Re-translate after edits; empty or invalid fields are flagged.
-- Only **Binary to Hex** works without the server when opening the HTML directly via `file://`.
+- **Base Converter:** edit any of the three fields, then click **Convert** to update all three using the last edited field. Unsigned 32-bit range: `0–4294967295`; invalid or overflowing values show an error.
+- Hex accepts an optional `0x` prefix and displays `0x` + eight uppercase digits. Binary accepts spaces and displays 32 bits in four-bit groups.
+- **Binary to Hex** and **Base Converter** also work offline via `file://`; other tools require the server.
 
 ## Safety and limits
 
