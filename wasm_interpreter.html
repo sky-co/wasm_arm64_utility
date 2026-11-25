@@ -35,6 +35,30 @@
     .bit-group label { margin: 0; text-align: center; font: 12px/1.6 ui-monospace, monospace; color: #526179; }
     .bit-group input { padding: 8px 0; text-align: center; }
     .nibble-hex { grid-column: 1 / -1; text-align: center; padding-top: 8px; font: 600 18px ui-monospace, monospace; }
+    .memory-layout-status { margin: 8px 0 0; font-size: 13px; color: #526179; }
+    .memory-segment-legend { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; }
+    .memory-segment { display: inline-flex; align-items: center; gap: 6px; padding: 2px 8px; border: 1px solid #2d3f60; border-radius: 4px; background: #15233a; color: #deebff; cursor: pointer; font: 12px ui-monospace, monospace; }
+    .memory-segment.active { border-color: #82b4ff; box-shadow: 0 0 0 1px #82b4ff inset; }
+    .memory-segment-swatch { width: 12px; height: 12px; border-radius: 2px; border: 1px solid #b7c8e1; }
+    .memory-layout-viewport { margin-top: 10px; max-height: 420px; overflow: auto; border: 1px solid #2b3f61; border-radius: 6px; background: #0b111a; color: #d7e7ff; font: 12px/1.2 ui-monospace, monospace; padding: 6px; }
+    .memory-row { display: grid; grid-template-columns: 104px minmax(0, 1fr) 220px; gap: 4px; align-items: center; white-space: nowrap; margin-bottom: 2px; }
+    .memory-address { color: #6e829f; font-weight: 700; letter-spacing: .3px; }
+    .memory-hex, .memory-ascii { display: flex; gap: 1px; min-width: 0; }
+    .memory-byte { display: inline-flex; width: 22px; justify-content: center; border-radius: 0; background: #0f1a2b; color: #f8fbff; padding: 2px 0; }
+    .memory-byte.ascii { width: 12px; background: transparent; padding: 0; }
+    .memory-byte.faded { opacity: .22; }
+    .memory-byte.block-gap { margin-right: 3px; }
+    .memory-jump { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 8px; margin-top: 10px; }
+    .memory-jump input { margin: 0; }
+    .memory-jump button { white-space: nowrap; }
+    .segment-color-0 { background: #cf2d2d; color: #fff; }
+    .segment-color-1 { background: #8c3df5; color: #fff; }
+    .segment-color-2 { background: #0ea5e9; color: #00101a; }
+    .segment-color-3 { background: #06b6d4; color: #001217; }
+    .segment-color-4 { background: #22c55e; color: #041006; }
+    .segment-color-5 { background: #eab308; color: #171100; }
+    .segment-color-6 { background: #f97316; color: #180900; }
+    .segment-color-7 { background: #ec4899; color: #1a0310; }
     @media (max-width: 1200px) { .bit-groups { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
     @media (max-width: 800px) { body { padding: 16px; } .grid { grid-template-columns: 1fr; } }
     @media (max-width: 600px) {
@@ -47,7 +71,7 @@
 </head>
 <body>
   <h1>WebAssembly / AArch64 Toolbox</h1>
-  <p class="intro">Wasm inspection, AArch64 assembly/disassembly, and 32-bit number conversion.</p>
+  <p class="intro">Wasm inspection (including uploaded WAST memory layout), AArch64 assembly/disassembly, and 32-bit number conversion.</p>
   <div class="grid">
     <section>
       <h2>1. wast2json</h2>
@@ -109,6 +133,28 @@
       <div class="actions"><button id="radix-convert">convert</button><button id="radix-reset">reset</button></div>
       <p id="radix-status" class="radix-status" role="status" aria-live="polite">32 bits; binary grouped by four. No server required.</p>
     </section>
+    <section class="binary-translator" aria-labelledby="memory-layout-title">
+      <h2 id="memory-layout-title">7. WAST Memory Layout Explorer</h2>
+      <label for="memory-file">Upload .wast / .wat / .wasm file</label>
+      <input id="memory-file" type="file" accept=".wast,.wat,.wasm,application/wasm">
+      <div class="actions"><button id="memory-upload" type="button">upload</button><button id="memory-reset" type="button">reset</button></div>
+      <label for="memory-source-path">Loaded file path / name</label>
+      <input id="memory-source-path" placeholder="No file loaded" spellcheck="false" readonly>
+      <label for="memory-module">Module index (for multi-module WAST)</label>
+      <select id="memory-module"><option value="0">0</option></select>
+      <label for="memory-bytes">Preview bytes (64-262144)</label>
+      <input id="memory-bytes" type="number" min="64" max="262144" step="64" value="1024">
+      <p class="hint">Like wasmcodeexplorer: upload a WAST containing module definitions, then inspect linear memory initialization and data segment placement.</p>
+      <div class="actions"><button id="memory-layout">inspect memory layout</button></div>
+      <pre id="memory-layout-output" role="status" aria-live="polite">Upload a file, then inspect memory layout.</pre>
+      <p id="memory-layout-status" class="memory-layout-status" role="status" aria-live="polite">No memory visualization yet.</p>
+      <div id="memory-segment-legend" class="memory-segment-legend" aria-label="Memory segment legend"></div>
+      <div class="memory-jump">
+        <input id="memory-jump-address" placeholder="Jump to address, e.g. 0x10 or 16" spellcheck="false" autocomplete="off">
+        <button id="memory-jump-go" type="button">jump</button>
+      </div>
+      <div id="memory-layout-viewport" class="memory-layout-viewport" aria-label="Scrollable memory view"></div>
+    </section>
   </div>
   <script>
     const $ = id => document.getElementById(id);
@@ -124,6 +170,16 @@
       if (!response.ok) throw new Error(result.error || `HTTP ${response.status}`);
       return result;
     }
+    async function toBase64(file) {
+      const buffer = await file.arrayBuffer();
+      const bytes = new Uint8Array(buffer);
+      let binary = '';
+      const chunkSize = 0x8000;
+      for (let i = 0; i < bytes.length; i += chunkSize) {
+        binary += String.fromCharCode(...bytes.subarray(i, i + chunkSize));
+      }
+      return btoa(binary);
+    }
     function bind(id, output, handler) {
       $(id).addEventListener('click', async () => {
         $(id).disabled = true;
@@ -133,6 +189,193 @@
         finally { $(id).disabled = false; }
       });
     }
+    function segmentColor(index) {
+      return `segment-color-${index % 8}`;
+    }
+    function decodeBase64(base64) {
+      const binary = atob(base64 || '');
+      const bytes = new Uint8Array(binary.length);
+      for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+      return bytes;
+    }
+    function parseAddress(text) {
+      const value = text.trim();
+      if (!value) throw new Error('Enter an address first.');
+      if (/^0x[0-9a-f]+$/i.test(value)) return Number.parseInt(value.slice(2), 16);
+      if (/^[0-9]+$/i.test(value)) return Number.parseInt(value, 10);
+      throw new Error('Address must be decimal digits or hexadecimal with 0x prefix.');
+    }
+    const memoryViewState = { byteLength: 0, rows: new Map() };
+    const memoryUploadState = { filename: '', contentBase64: '' };
+    function setMemoryModuleOptions(modules) {
+      if (!modules?.length) {
+        $('memory-module').replaceChildren(new Option('0', '0'));
+        return;
+      }
+      $('memory-module').replaceChildren(...modules.map((module, index) => {
+        if (typeof module === 'string') return new Option(`${index}: ${module.split('/').pop()}`, String(index));
+        return new Option(`${module.index}: ${module.name}`, String(module.index));
+      }));
+      $('memory-module').value = '0';
+    }
+    function clearMemoryView(message = 'No memory visualization yet.') {
+      $('memory-segment-legend').replaceChildren();
+      $('memory-layout-viewport').replaceChildren();
+      memoryViewState.byteLength = 0;
+      memoryViewState.rows.clear();
+      $('memory-layout-status').textContent = message;
+    }
+    function clearMemoryUpload(message = 'Reset. Select a file and click "upload", or run wast2json to auto-load the same source.') {
+      memoryUploadState.filename = '';
+      memoryUploadState.contentBase64 = '';
+      $('memory-file').value = '';
+      $('memory-source-path').value = '';
+      $('memory-jump-address').value = '';
+      setMemoryModuleOptions([]);
+      display('memory-layout-output', message);
+      clearMemoryView('No memory visualization yet.');
+    }
+    function setMemoryUpload({ filename, contentBase64, sourcePath }) {
+      memoryUploadState.filename = filename;
+      memoryUploadState.contentBase64 = contentBase64;
+      $('memory-source-path').value = sourcePath || filename;
+      $('memory-jump-address').value = '';
+      display('memory-layout-output', `Loaded source: ${sourcePath || filename}\nSelect module/preview bytes, then click "inspect memory layout".`);
+      clearMemoryView('File loaded. Click "inspect memory layout".');
+    }
+    function jumpToAddress() {
+      const address = parseAddress($('memory-jump-address').value);
+      if (!memoryViewState.byteLength) throw new Error('Inspect memory layout first.');
+      if (!Number.isInteger(address) || address < 0 || address >= memoryViewState.byteLength) {
+        throw new Error(`Address must be within preview range 0-${memoryViewState.byteLength - 1}.`);
+      }
+      const rowAddress = address - (address % 16);
+      const row = memoryViewState.rows.get(rowAddress);
+      if (!row) throw new Error('Address row is unavailable in current preview.');
+      $('memory-layout-viewport').scrollTo({ top: Math.max(0, row.offsetTop - 8), behavior: 'smooth' });
+      $('memory-layout-status').textContent = `Jumped to 0x${address.toString(16)} (row 0x${rowAddress.toString(16)}).`;
+    }
+    function renderByteLayout({ bytes, ranges, readyMessage, emptyMessage }) {
+      const viewport = $('memory-layout-viewport');
+      const legend = $('memory-segment-legend');
+      viewport.replaceChildren();
+      legend.replaceChildren();
+      memoryViewState.byteLength = bytes.length;
+      memoryViewState.rows.clear();
+      if (!bytes.length) {
+        $('memory-layout-status').textContent = emptyMessage;
+        return;
+      }
+      const owner = new Int32Array(bytes.length).fill(-1);
+      for (const range of ranges) {
+        const start = Math.max(0, range.start);
+        const end = Math.min(bytes.length, range.start + range.size);
+        for (let i = start; i < end; i++) owner[i] = range.id;
+      }
+      let activeRange = null;
+      const byteElements = [];
+      const updateHighlight = () => {
+        for (const element of byteElements) {
+          const sameRange = activeRange === null || Number(element.dataset.segment) === activeRange;
+          element.classList.toggle('faded', !sameRange);
+        }
+        for (const button of legend.querySelectorAll('button')) {
+          button.classList.toggle('active', Number(button.dataset.segment) === activeRange);
+        }
+      };
+      for (const range of ranges) {
+        const button = document.createElement('button');
+        button.type = 'button';
+        button.className = 'memory-segment';
+        button.dataset.segment = String(range.id);
+        button.innerHTML = `<span class="memory-segment-swatch ${segmentColor(range.id)}"></span>${range.label}`;
+        button.addEventListener('click', () => {
+          activeRange = activeRange === range.id ? null : range.id;
+          updateHighlight();
+          if (activeRange !== null) {
+            const startAddress = ranges.find(item => item.id === activeRange)?.start;
+            if (Number.isInteger(startAddress) && startAddress >= 0 && startAddress < bytes.length) {
+              const rowAddress = startAddress - (startAddress % 16);
+              const row = memoryViewState.rows.get(rowAddress);
+              if (row) viewport.scrollTo({ top: Math.max(0, row.offsetTop - 8), behavior: 'smooth' });
+            }
+          }
+        });
+        legend.append(button);
+      }
+      const fragment = document.createDocumentFragment();
+      for (let rowStart = 0; rowStart < bytes.length; rowStart += 16) {
+        const row = document.createElement('div');
+        row.className = 'memory-row';
+        memoryViewState.rows.set(rowStart, row);
+        const address = document.createElement('span');
+        address.className = 'memory-address';
+        address.textContent = `0x${rowStart.toString(16).padStart(8, '0')}`;
+        const hex = document.createElement('div');
+        hex.className = 'memory-hex';
+        const ascii = document.createElement('div');
+        ascii.className = 'memory-ascii';
+        for (let i = rowStart; i < Math.min(rowStart + 16, bytes.length); i++) {
+          const rangeId = owner[i];
+          const hexByte = document.createElement('span');
+          hexByte.className = `memory-byte ${rangeId >= 0 ? segmentColor(rangeId) : ''}`.trim();
+          if ((i - rowStart) % 8 === 7) hexByte.classList.add('block-gap');
+          hexByte.dataset.segment = String(rangeId);
+          hexByte.textContent = bytes[i].toString(16).padStart(2, '0');
+          byteElements.push(hexByte);
+          hex.append(hexByte);
+          const asciiByte = document.createElement('span');
+          asciiByte.className = `memory-byte ascii ${rangeId >= 0 ? segmentColor(rangeId) : ''}`.trim();
+          if ((i - rowStart) % 8 === 7) asciiByte.classList.add('block-gap');
+          asciiByte.dataset.segment = String(rangeId);
+          asciiByte.textContent = bytes[i] >= 0x20 && bytes[i] <= 0x7E ? String.fromCharCode(bytes[i]) : '.';
+          byteElements.push(asciiByte);
+          ascii.append(asciiByte);
+        }
+        row.append(address, hex, ascii);
+        fragment.append(row);
+      }
+      viewport.append(fragment);
+      $('memory-layout-status').textContent = readyMessage;
+      updateHighlight();
+    }
+    function renderMemoryLayout(layout) {
+      if (layout.previewBytesBase64 && layout.previewLength) {
+        const bytes = decodeBase64(layout.previewBytesBase64);
+        const ranges = layout.segments
+          .filter(segment => segment.memoryIndex === 0)
+          .map(segment => ({
+            id: segment.index,
+            start: segment.offset,
+            size: segment.size,
+            label: `segment[${segment.index}] @ ${segment.offset} (${segment.size}B)`,
+          }));
+        renderByteLayout({
+          bytes,
+          ranges,
+          readyMessage: 'Linear memory view ready. Click a segment chip to focus and jump, or use address jump.',
+          emptyMessage: 'No previewable memory bytes. This module may import memory.',
+        });
+        return;
+      }
+      if (layout.moduleBytesBase64) {
+        const bytes = decodeBase64(layout.moduleBytesBase64);
+        const ranges = (layout.moduleSections || []).map((section, index) => ({
+          id: index,
+          start: section.start,
+          size: section.size,
+          label: `${section.name} 0x${section.start.toString(16)}..0x${Math.max(section.start, section.end - 1).toString(16)} (${section.size}B)`,
+        }));
+        renderByteLayout({
+          bytes,
+          ranges,
+          readyMessage: 'Module byte layout shown (no linear memory defined). Click a section chip to focus and jump, or use address jump.',
+          emptyMessage: 'Module byte view is unavailable for this file.',
+        });
+        return;
+      }
+      clearMemoryView('No previewable data found for this module.');
+    }
     function wasmSource() {
       const source = $('wasm-source').value.trim() || $('module').value
         || $('source').value.trim();
@@ -141,15 +384,33 @@
     }
     bind('convert', 'convert-output', async () => {
       $('module').replaceChildren(new Option('No modules available. Complete a conversion first.', ''));
-      const result = await api('convert', { source: $('source').value });
+      const source = $('source').value;
+      const result = await api('convert', { source });
+      let loaded = null;
+      let autoLoadWarning = '';
+      try {
+        loaded = await api('memory-load-source', { source });
+      } catch (error) {
+        autoLoadWarning = `\nNote: section 7 auto-load is unavailable (${error.message}). You can still use section 7 by selecting a file and clicking "upload".`;
+      }
       $('module').replaceChildren(...result.modules.map(name => new Option(name, name)));
       if (!result.modules.length) $('module').add(new Option('No modules generated for disassembly', ''));
       $('wasm-source').value = '';
+      if (loaded) {
+        setMemoryModuleOptions(result.modules);
+        setMemoryUpload({
+          filename: loaded.filename,
+          contentBase64: loaded.contentBase64,
+          sourcePath: source.trim(),
+        });
+        $('memory-layout-status').textContent = 'Auto-loaded from the wast2json source. Ready to inspect.';
+      }
       display('convert-output', [
         result.jsonPath ? `JSON: ${result.jsonPath}` : result.output,
         `Module count: ${result.modules.length}`,
         result.jsonPath ? result.output : '',
         result.manifest ? JSON.stringify(result.manifest, null, 2) : '',
+        autoLoadWarning,
       ].filter(Boolean).join('\n'));
     });
     bind('objdump', 'objdump-output', async () => {
@@ -163,6 +424,83 @@
     bind('assemble', 'assemble-output', async () => {
       const result = await api('assemble', { instruction: $('instruction').value });
       display('assemble-output', `Little-endian bytes: ${result.bytes}\nInstruction word: ${result.word}\n\n${result.output}`);
+    });
+    bind('memory-layout', 'memory-layout-output', async () => {
+      if (!memoryUploadState.filename || !memoryUploadState.contentBase64) {
+        throw new Error('Load a file first: click "upload" in section 7, or run wast2json to auto-load the same source.');
+      }
+      const moduleIndex = Number.parseInt($('memory-module').value, 10);
+      const maxBytes = Number.parseInt($('memory-bytes').value, 10);
+      if (!Number.isInteger(moduleIndex) || moduleIndex < 0) {
+        throw new Error('Module index must be a non-negative integer.');
+      }
+      if (!Number.isInteger(maxBytes) || maxBytes < 64 || maxBytes > 262144) {
+        throw new Error('Preview bytes must be between 64 and 262144.');
+      }
+      const result = await api('memory-layout', {
+        filename: memoryUploadState.filename,
+        contentBase64: memoryUploadState.contentBase64,
+        moduleIndex,
+        maxBytes,
+      });
+      $('memory-module').replaceChildren(...result.modules.map(module =>
+        new Option(`${module.index}: ${module.name}`, String(module.index))));
+      $('memory-module').value = String(result.selectedModule);
+      const layout = result.memoryLayout;
+      const header = [
+        `Module: ${result.modules[result.selectedModule].name}`,
+        layout.initialPages === null
+          ? 'Memory: not defined in module (possibly imported). Showing module byte layout.'
+          : `Memory: initial=${layout.initialPages} page(s)${layout.maxPages === null ? '' : `, max=${layout.maxPages}`} (${layout.byteLength} bytes total)`,
+        `Preview bytes: ${layout.previewLength}`,
+        layout.moduleSize ? `Module bytes: ${layout.moduleSize}` : '',
+      ];
+      const segments = layout.segments.length
+        ? ['Data segments:', ...layout.segments.map(segment =>
+          `  - segment[${segment.index}] memory=${segment.memoryIndex} offset=${segment.offset} size=${segment.size}${segment.dataPreviewTruncated ? ' (preview truncated)' : ''}`)]
+        : ['Data segments: none'];
+      const warnings = layout.warnings.length ? ['Warnings:', ...layout.warnings.map(item => `  - ${item}`)] : [];
+      display('memory-layout-output', [...header, '', ...segments, ...(warnings.length ? ['', ...warnings] : [])].join('\n'));
+      renderMemoryLayout(layout);
+    });
+    $('memory-file').addEventListener('change', () => {
+      const file = $('memory-file').files?.[0];
+      if (!file) {
+        $('memory-source-path').value = '';
+        display('memory-layout-output', 'No file selected.');
+        return;
+      }
+      $('memory-source-path').value = file.name;
+      display('memory-layout-output', `Selected: ${file.name}\nClick "upload" to load file content into the explorer.`);
+      clearMemoryView('File selected. Click "upload".');
+    });
+    bind('memory-upload', 'memory-layout-output', async () => {
+      const file = $('memory-file').files?.[0];
+      if (!file) throw new Error('Select a .wast, .wat, or .wasm file first.');
+      const extension = file.name.toLowerCase().split('.').pop();
+      if (!['wast', 'wat', 'wasm'].includes(extension || '')) {
+        throw new Error('File extension must be .wast, .wat, or .wasm.');
+      }
+      setMemoryUpload({
+        filename: file.name,
+        contentBase64: await toBase64(file),
+        sourcePath: file.name,
+      });
+    });
+    $('memory-reset').addEventListener('click', () => {
+      clearMemoryUpload();
+    });
+    $('memory-jump-go').addEventListener('click', () => {
+      try {
+        jumpToAddress();
+      } catch (error) {
+        $('memory-layout-status').textContent = error.message;
+      }
+    });
+    $('memory-jump-address').addEventListener('keydown', event => {
+      if (event.key !== 'Enter') return;
+      event.preventDefault();
+      $('memory-jump-go').click();
     });
     const radixFields = ['hex', 'decimal', 'binary'];
     function parseRadix(value, base) {
@@ -278,6 +616,7 @@
     if (location.protocol === 'file:') {
       display('convert-output', 'Run node tooling/server.mjs, then open http://127.0.0.1:1818. Opening the HTML file directly cannot invoke local commands.', true);
     }
+    clearMemoryUpload('Select a file and click "upload", or run wast2json to auto-load the same source.');
   </script>
 </body>
 </html>

@@ -1,6 +1,6 @@
 # WebAssembly / AArch64 Toolkit
 
-Browser-based tools for Wasm inspection, AArch64 assembly/disassembly, and 32-bit base conversion.
+Browser-based tools for Wasm inspection (including uploaded WAST memory layout), AArch64 assembly/disassembly, and 32-bit base conversion.
 
 ## Quick start
 
@@ -51,13 +51,21 @@ Keep all commands on PATH. No npm packages, Python, QEMU, or ARM64 hardware requ
 | **Base Converter** → **convert** | Hex field: `0xD10043FF` | Decimal `3506455551`; binary `1101 0001 0000 0000 0100 0011 1111 1111` |
 | **Base Converter** → **convert** | Decimal field: `16`, or binary field: `0001 0000` | Hex `0x00000010`; decimal `16`; binary `0000 0000 0000 0000 0000 0000 0001 0000` |
 | **Base Converter** → **reset** | Any values in Hex/Decimal/Binary | Hex `0x00000000`; decimal `0`; binary `0000 0000 0000 0000 0000 0000 0000 0000` |
+| **WAST Memory Layout Explorer** | Upload `layout.wast`, choose module, inspect | If linear memory exists: shows memory bytes + data-segment highlight. If not: shows module byte layout + section highlight |
 
 ### Wasm workflow
 
 ```text
 WAST path/URL → wast2json → select module → wasm-objdump
 Wasm path/URL ───────────────────────────→ wasm-objdump
+Upload WAST/WAT/WASM ───────────────────→ memory layout explorer
 ```
+
+### Memory layout explorer workflow
+
+- In section 7, selecting a file does not load content immediately; click **upload** to load it.
+- Click **reset** to clear section 7 file state, module options, memory view, and jump state.
+- Running **wast2json** in section 1 now auto-loads the same source file into section 7 by default.
 
 Absolute paths, project-relative paths, and HTTP(S) URLs are supported, including multi-module WAST.
 Local conversion may overwrite outputs beside the source; remote files use temporary storage cleaned up on normal exit.

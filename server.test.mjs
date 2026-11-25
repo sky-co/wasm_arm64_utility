@@ -31,7 +31,7 @@ test('toolbox integration with installed command-line tools', async t => {
     const response = await fetch(`${base}/wasm_interpreter.html`);
     assert.equal(response.status, 200);
     const html = await response.text();
-    assert.equal([...html.matchAll(/<section(?:\s[^>]*)?>/g)].length, 6);
+    assert.equal([...html.matchAll(/<section(?:\s[^>]*)?>/g)].length, 7);
     assert.doesNotMatch(html, /wasm-worker|runtime-output/);
     assert.match(html, /<html lang="en">/);
     assert.doesNotMatch(html, /\p{Script=Han}/u);
@@ -63,6 +63,9 @@ test('toolbox integration with installed command-line tools', async t => {
     ]);
     assert.deepEqual(JSON.parse(await readFile(result.jsonPath)), result.manifest);
     [wasm] = result.modules;
+    const loaded = await api('memory-load-source', { source });
+    assert.equal(loaded.filename, 'sample input.wast');
+    assert.ok(loaded.contentBase64.length > 0);
   });
   await t.test('objdump uses the selected binary and conversion accepts binary input', async () => {
     const dump = await api('objdump', { source: wasm });
@@ -116,6 +119,47 @@ test('toolbox integration with installed command-line tools', async t => {
       });
     }
   });
+  await t.test('uploaded WAST memory layout inspection', async () => {
+    const source = `(module
+      (memory 1)
+      (data (i32.const 0) "hello")
+      (data (i32.const 16) "\\01\\02\\ff"))`;
+    const result = await api('memory-layout', {
+      filename: 'layout.wast',
+      contentBase64: Buffer.from(source).toString('base64'),
+      moduleIndex: 0,
+      maxBytes: 256,
+    });
+    assert.deepEqual(result.modules, [{ index: 0, name: 'layout.0.wasm' }]);
+    assert.equal(result.selectedModule, 0);
+    assert.equal(result.memoryLayout.initialPages, 1);
+    assert.equal(result.memoryLayout.previewLength, 256);
+    assert.ok(result.memoryLayout.previewBytesBase64.length > 0);
+    assert.equal(result.memoryLayout.segments.length, 2);
+    const preview = Buffer.from(result.memoryLayout.previewBytesBase64, 'base64');
+    assert.equal(preview[0], 0x68);
+    assert.equal(preview[1], 0x65);
+    assert.equal(preview[16], 0x01);
+    assert.equal(preview[17], 0x02);
+    assert.equal(preview[18], 0xff);
+    assert.match(result.memoryLayout.previewHexDump, /00000000:\s+68 65 6c 6c 6f/);
+    assert.match(result.memoryLayout.previewHexDump, /00000010:\s+01 02 ff/);
+  });
+  await t.test('module byte layout is returned when no linear memory exists', async () => {
+    const source = `(module
+      (func (export "id") (param i32) (result i32) local.get 0))`;
+    const result = await api('memory-layout', {
+      filename: 'nomem.wast',
+      contentBase64: Buffer.from(source).toString('base64'),
+      moduleIndex: 0,
+      maxBytes: 256,
+    });
+    assert.equal(result.memoryLayout.initialPages, null);
+    assert.equal(result.memoryLayout.previewLength, 0);
+    assert.ok(result.memoryLayout.moduleSize > 0);
+    assert.ok(result.memoryLayout.moduleBytesBase64.length > 0);
+    assert.ok(result.memoryLayout.moduleSections.length > 0);
+  });
   await t.test('invalid inputs and tool errors are visible', async () => {
     for (const code of ['0x123U', '0xD10043FF00U', 'FF 43 00 D1', 'not hex']) {
       assert.match((await api('disassemble', { code }, 400)).error, /8-digit hexadecimal/);
@@ -131,5 +175,9 @@ test('toolbox integration with installed command-line tools', async t => {
     const badWasm = path.join(folder, 'invalid.wasm');
     await writeFile(badWasm, 'not wasm');
     assert.match((await api('objdump', { source: badWasm }, 400)).error, /wasm-objdump/);
+    assert.match((await api('memory-layout', {
+      filename: 'bad.txt',
+      contentBase64: Buffer.from('x').toString('base64'),
+    }, 400)).error, /Upload a \.wasm, \.wast, or \.wat file/);
   });
 });

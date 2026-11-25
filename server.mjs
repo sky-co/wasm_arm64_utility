@@ -24,6 +24,14 @@ function text(value, name) {
   return value.trim();
 }
 
+function integer(value, name, { minimum = Number.MIN_SAFE_INTEGER, maximum = Number.MAX_SAFE_INTEGER } = {}) {
+  if (!Number.isInteger(value)) throw new RequestError(`${name} must be an integer.`);
+  if (value < minimum || value > maximum) {
+    throw new RequestError(`${name} must be between ${minimum} and ${maximum}.`);
+  }
+  return value;
+}
+
 function command(program, args, input) {
   return new Promise((resolve, reject) => {
     const child = spawn(program, args, { stdio: ['pipe', 'pipe', 'pipe'] });
@@ -84,6 +92,116 @@ async function readJson(request) {
     if (error instanceof SyntaxError) throw new RequestError('Invalid JSON request.');
     throw error;
   }
+}
+
+function parseDataSegments(objdumpOutput) {
+  const segmentPattern = /-\ssegment\[(\d+)\]\smemory=(\d+)\ssize=(\d+)\s-\sinit\si32=(\d+)\n((?:\s+-\s+[0-9a-f]+:.*\n)*)/gi;
+  const segments = [];
+  let match;
+  while ((match = segmentPattern.exec(objdumpOutput))) {
+    const [, index, memoryIndex, size, offset, rows] = match;
+    const bytes = [];
+    for (const row of rows.split('\n')) {
+      if (!row.trim()) continue;
+      const rowMatch = /^\s+-\s+[0-9a-f]+:\s+([0-9a-f ]+?)(?:\s{2,}.*)?$/i.exec(row);
+      if (!rowMatch) continue;
+      const compact = rowMatch[1].replace(/\s+/g, '');
+      for (let i = 0; i + 1 < compact.length; i += 2) {
+        bytes.push(Number.parseInt(compact.slice(i, i + 2), 16));
+      }
+    }
+    segments.push({
+      index: Number.parseInt(index, 10),
+      memoryIndex: Number.parseInt(memoryIndex, 10),
+      size: Number.parseInt(size, 10),
+      offset: Number.parseInt(offset, 10),
+      bytes,
+    });
+  }
+  return segments;
+}
+
+function hexDump(bytes, start = 0) {
+  const lines = [];
+  for (let i = 0; i < bytes.length; i += 16) {
+    const row = bytes.slice(i, i + 16);
+    const hex = [...row].map(value => value.toString(16).padStart(2, '0')).join(' ').padEnd(16 * 3 - 1, ' ');
+    const ascii = [...row].map(value => (value >= 0x20 && value <= 0x7E ? String.fromCharCode(value) : '.')).join('');
+    lines.push(`${(start + i).toString(16).padStart(8, '0')}: ${hex}  |${ascii}|`);
+  }
+  return lines.join('\n');
+}
+
+function parseModuleSections(headerOutput) {
+  const sections = [];
+  const lines = headerOutput.split('\n');
+  for (const line of lines) {
+    const match = /^\s*([A-Za-z0-9_.$-]+)\s+start=0x([0-9a-f]+)\s+end=0x([0-9a-f]+)\s+\(size=0x([0-9a-f]+)\)/i.exec(line);
+    if (!match) continue;
+    const [, name, startHex, endHex, sizeHex] = match;
+    sections.push({
+      name,
+      start: Number.parseInt(startHex, 16),
+      end: Number.parseInt(endHex, 16),
+      size: Number.parseInt(sizeHex, 16),
+    });
+  }
+  return sections;
+}
+
+function buildMemoryLayout(objdumpOutput, maxBytes) {
+  const memoryMatch = /memory\[\d+\]\spages:\sinitial=(\d+)(?:\smax=(\d+))?/i.exec(objdumpOutput);
+  const initialPages = memoryMatch ? Number.parseInt(memoryMatch[1], 10) : null;
+  const maxPages = memoryMatch?.[2] ? Number.parseInt(memoryMatch[2], 10) : null;
+  const segments = parseDataSegments(objdumpOutput);
+  const warnings = [];
+
+  if (initialPages === null) {
+    return {
+      initialPages: null,
+      maxPages: null,
+      byteLength: null,
+      previewLength: 0,
+      previewHexDump: '',
+      previewBytesBase64: '',
+      segments: segments.map(({ bytes, ...rest }) => ({ ...rest, dataPreviewHex: Buffer.from(bytes).toString('hex') })),
+      warnings: ['No defined linear memory was found in this module. It may import memory from the host.'],
+    };
+  }
+
+  const byteLength = initialPages * 64 * 1024;
+  const limit = Math.min(byteLength, maxBytes);
+  const memory = Buffer.alloc(limit, 0);
+  for (const segment of segments) {
+    if (segment.memoryIndex !== 0) {
+      warnings.push(`Skipped segment[${segment.index}] because only memory[0] is currently visualized.`);
+      continue;
+    }
+    const start = segment.offset;
+    if (start >= limit) {
+      warnings.push(`Skipped segment[${segment.index}] at offset ${start} because it is outside the preview range (${limit} bytes).`);
+      continue;
+    }
+    const copied = Math.min(segment.bytes.length, limit - start);
+    Buffer.from(segment.bytes).copy(memory, start, 0, copied);
+    if (copied < segment.bytes.length) {
+      warnings.push(`Truncated segment[${segment.index}] in preview (${copied}/${segment.bytes.length} bytes shown).`);
+    }
+  }
+  return {
+    initialPages,
+    maxPages,
+    byteLength,
+    previewLength: limit,
+    previewHexDump: hexDump(memory),
+    previewBytesBase64: memory.toString('base64'),
+    segments: segments.map(({ bytes, ...rest }) => ({
+      ...rest,
+      dataPreviewHex: Buffer.from(bytes.slice(0, 64)).toString('hex'),
+      dataPreviewTruncated: bytes.length > 64,
+    })),
+    warnings,
+  };
 }
 
 export async function createToolServer() {
@@ -161,6 +279,76 @@ export async function createToolServer() {
       } finally {
         await rm(folder, { recursive: true, force: true });
       }
+    }
+    if (name === 'memory-layout') {
+      const filename = text(data.filename, 'Filename');
+      const extension = path.extname(filename).toLowerCase();
+      if (!extensions.has(extension)) {
+        throw new RequestError('Upload a .wasm, .wast, or .wat file.');
+      }
+      const contentBase64 = text(data.contentBase64, 'File content');
+      let bytes;
+      try {
+        bytes = Buffer.from(contentBase64, 'base64');
+      } catch {
+        throw new RequestError('File content must be base64.');
+      }
+      if (!bytes.length) throw new RequestError('Uploaded file is empty.');
+      if (bytes.length > maxFileSize) throw new RequestError('Uploaded file exceeds the 16 MiB limit.', 413);
+      const moduleIndex = data.moduleIndex === undefined
+        ? 0 : integer(data.moduleIndex, 'Module index', { minimum: 0, maximum: 10_000 });
+      const maxBytes = data.maxBytes === undefined
+        ? 1024 : integer(data.maxBytes, 'Preview bytes', { minimum: 64, maximum: 262_144 });
+      const folder = await mkdtemp(path.join(cacheDirectory, 'upload-'));
+      try {
+        const sourcePath = path.join(folder, path.basename(filename));
+        await writeFile(sourcePath, bytes);
+        let modulePaths;
+        if (extension === '.wasm') {
+          modulePaths = [sourcePath];
+        } else {
+          const jsonPath = path.join(folder, `${path.parse(sourcePath).name}.json`);
+          await command('wast2json', [sourcePath, '-o', jsonPath]);
+          const manifest = JSON.parse(await readFile(jsonPath, 'utf8'));
+          modulePaths = manifest.commands.filter(entry => entry.type === 'module')
+            .map(entry => path.resolve(path.dirname(jsonPath), entry.filename));
+          if (!modulePaths.length) {
+            throw new RequestError('No module entries were found in this WAST/WAT file.');
+          }
+        }
+        if (moduleIndex >= modulePaths.length) {
+          throw new RequestError(`Module index ${moduleIndex} is out of range (0-${modulePaths.length - 1}).`);
+        }
+        const selectedPath = modulePaths[moduleIndex];
+        const [dump, headers] = await Promise.all([
+          command('wasm-objdump', ['-x', '-s', selectedPath]),
+          command('wasm-objdump', ['-h', selectedPath]),
+        ]);
+        const moduleBytes = await readFile(selectedPath);
+        return {
+          modules: modulePaths.map((modulePath, index) => ({
+            index,
+            name: path.basename(modulePath),
+          })),
+          selectedModule: moduleIndex,
+          memoryLayout: {
+            ...buildMemoryLayout(dump.stdout + dump.stderr, maxBytes),
+            moduleSize: moduleBytes.length,
+            moduleBytesBase64: moduleBytes.toString('base64'),
+            moduleSections: parseModuleSections(headers.stdout + headers.stderr),
+          },
+        };
+      } finally {
+        await rm(folder, { recursive: true, force: true });
+      }
+    }
+    if (name === 'memory-load-source') {
+      const filename = await resolveSource(data.source);
+      const bytes = await readFile(filename);
+      return {
+        filename: path.basename(filename),
+        contentBase64: bytes.toString('base64'),
+      };
     }
     if (!['convert', 'objdump'].includes(name)) {
       throw new RequestError('API endpoint not found.', 404);
