@@ -26,7 +26,7 @@ node_supported() {
 
 check_dependencies() {
     local failed=0 tool version
-    for tool in node wast2json wasm-objdump llvm-mc aarch64-linux-gnu-objdump; do
+    for tool in node wast2json wasm-objdump wasm2wat llvm-mc aarch64-linux-gnu-objdump; do
         if ! command -v "$tool" >/dev/null 2>&1; then
             printf '[MISSING] %s\n' "$tool" >&2
             failed=1
@@ -53,7 +53,7 @@ packages=()
 if ! node_supported; then
     packages+=(nodejs)
 fi
-if ! command -v wast2json >/dev/null 2>&1 || ! command -v wasm-objdump >/dev/null 2>&1; then
+if ! command -v wast2json >/dev/null 2>&1 || ! command -v wasm-objdump >/dev/null 2>&1 || ! command -v wasm2wat >/dev/null 2>&1; then
     packages+=(wabt)
 fi
 if ! command -v llvm-mc >/dev/null 2>&1; then

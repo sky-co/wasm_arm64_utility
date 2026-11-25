@@ -4,6 +4,7 @@ import { mkdtemp, readFile, rm, stat, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { buildWatSourceMap } from './wasm-source-map.mjs';
 
 const directory = path.dirname(fileURLToPath(import.meta.url));
 const projectRoot = path.dirname(directory);
@@ -135,16 +136,19 @@ function hexDump(bytes, start = 0) {
 function parseModuleSections(headerOutput) {
   const sections = [];
   const lines = headerOutput.split('\n');
+  let headerStart = 8;
   for (const line of lines) {
     const match = /^\s*([A-Za-z0-9_.$-]+)\s+start=0x([0-9a-f]+)\s+end=0x([0-9a-f]+)\s+\(size=0x([0-9a-f]+)\)/i.exec(line);
     if (!match) continue;
     const [, name, startHex, endHex, sizeHex] = match;
     sections.push({
       name,
+      headerStart,
       start: Number.parseInt(startHex, 16),
       end: Number.parseInt(endHex, 16),
       size: Number.parseInt(sizeHex, 16),
     });
+    headerStart = Number.parseInt(endHex, 16);
   }
   return sections;
 }
@@ -299,6 +303,9 @@ export async function createToolServer() {
         ? 0 : integer(data.moduleIndex, 'Module index', { minimum: 0, maximum: 10_000 });
       const maxBytes = data.maxBytes === undefined
         ? 1024 : integer(data.maxBytes, 'Preview bytes', { minimum: 64, maximum: 262_144 });
+      if (data.paddedLeb128 !== undefined && typeof data.paddedLeb128 !== 'boolean') {
+        throw new RequestError('paddedLeb128 must be a boolean.');
+      }
       const folder = await mkdtemp(path.join(cacheDirectory, 'upload-'));
       try {
         const sourcePath = path.join(folder, path.basename(filename));
@@ -308,7 +315,8 @@ export async function createToolServer() {
           modulePaths = [sourcePath];
         } else {
           const jsonPath = path.join(folder, `${path.parse(sourcePath).name}.json`);
-          await command('wast2json', [sourcePath, '-o', jsonPath]);
+          await command('wast2json', [sourcePath, '-o', jsonPath,
+            ...(data.paddedLeb128 ? ['--no-canonicalize-leb128s'] : [])]);
           const manifest = JSON.parse(await readFile(jsonPath, 'utf8'));
           modulePaths = manifest.commands.filter(entry => entry.type === 'module')
             .map(entry => path.resolve(path.dirname(jsonPath), entry.filename));
@@ -320,11 +328,13 @@ export async function createToolServer() {
           throw new RequestError(`Module index ${moduleIndex} is out of range (0-${modulePaths.length - 1}).`);
         }
         const selectedPath = modulePaths[moduleIndex];
-        const [dump, headers] = await Promise.all([
-          command('wasm-objdump', ['-x', '-s', selectedPath]),
+        const [dump, headers, wat] = await Promise.all([
+          command('wasm-objdump', ['-x', '-s', '-d', selectedPath]),
           command('wasm-objdump', ['-h', selectedPath]),
+          command('wasm2wat', [selectedPath, '--generate-names']),
         ]);
         const moduleBytes = await readFile(selectedPath);
+        const moduleSections = parseModuleSections(headers.stdout + headers.stderr);
         return {
           modules: modulePaths.map((modulePath, index) => ({
             index,
@@ -335,7 +345,9 @@ export async function createToolServer() {
             ...buildMemoryLayout(dump.stdout + dump.stderr, maxBytes),
             moduleSize: moduleBytes.length,
             moduleBytesBase64: moduleBytes.toString('base64'),
-            moduleSections: parseModuleSections(headers.stdout + headers.stderr),
+            moduleSections,
+            moduleWat: wat.stdout,
+            moduleSourceMap: buildWatSourceMap(moduleBytes, moduleSections, wat.stdout, dump.stdout),
           },
         };
       } finally {

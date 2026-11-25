@@ -40,17 +40,30 @@
     .memory-segment { display: inline-flex; align-items: center; gap: 6px; padding: 2px 8px; border: 1px solid #2d3f60; border-radius: 4px; background: #15233a; color: #deebff; cursor: pointer; font: 12px ui-monospace, monospace; }
     .memory-segment.active { border-color: #82b4ff; box-shadow: 0 0 0 1px #82b4ff inset; }
     .memory-segment-swatch { width: 12px; height: 12px; border-radius: 2px; border: 1px solid #b7c8e1; }
-    .memory-layout-viewport { margin-top: 10px; max-height: 420px; overflow: auto; border: 1px solid #2b3f61; border-radius: 6px; background: #0b111a; color: #d7e7ff; font: 12px/1.2 ui-monospace, monospace; padding: 6px; }
-    .memory-row { display: grid; grid-template-columns: 104px minmax(0, 1fr) 220px; gap: 4px; align-items: center; white-space: nowrap; margin-bottom: 2px; }
-    .memory-address { color: #6e829f; font-weight: 700; letter-spacing: .3px; }
+    .memory-layout-viewport { position: relative; margin-top: 10px; max-height: 420px; overflow: auto; border: 1px solid #2b3f61; border-radius: 6px; background: #0b111a; color: #d7e7ff; font: 12px/1.2 ui-monospace, monospace; }
+    .memory-row { display: grid; grid-template-columns: 104px 373px 213px; width: max-content; min-width: 100%; gap: 4px; align-items: center; white-space: nowrap; margin-bottom: 2px; }
+    .memory-address { position: sticky; left: 0; z-index: 1; align-self: stretch; display: flex; align-items: center; padding-left: 6px; background: #0b111a; color: #6e829f; font-weight: 700; letter-spacing: .3px; box-shadow: 1px 0 #2b3f61; }
+    .memory-header { position: sticky; top: 0; z-index: 2; height: 28px; background: #15233a; color: #a7bddb; border-bottom: 1px solid #2b3f61; }
+    .memory-header .memory-address { z-index: 3; background: #15233a; color: #a7bddb; }
+    .memory-column { flex: 0 0 22px; text-align: center; }
     .memory-hex, .memory-ascii { display: flex; gap: 1px; min-width: 0; }
-    .memory-byte { display: inline-flex; width: 22px; justify-content: center; border-radius: 0; background: #0f1a2b; color: #f8fbff; padding: 2px 0; }
-    .memory-byte.ascii { width: 12px; background: transparent; padding: 0; }
+    .memory-byte { display: inline-flex; flex: 0 0 22px; justify-content: center; border-radius: 0; background: #0f1a2b; color: #f8fbff; padding: 2px 0; }
+    .memory-byte.ascii { flex-basis: 12px; background: transparent; padding: 0; }
     .memory-byte.faded { opacity: .22; }
-    .memory-byte.block-gap { margin-right: 3px; }
+    .block-gap { margin-right: 3px; }
     .memory-jump { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 8px; margin-top: 10px; }
     .memory-jump input { margin: 0; }
     .memory-jump button { white-space: nowrap; }
+    .memory-panes { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 8px; margin-top: 10px; }
+    .memory-panes .memory-layout-viewport { margin-top: 0; }
+    .memory-wat { margin: 0; min-height: 120px; max-height: 420px; white-space: pre; overflow-wrap: normal; border: 1px solid #2b3f61; background: #0b111a; }
+    .memory-wat-line { display: block; width: max-content; min-width: 100%; cursor: pointer; }
+    .memory-wat-line.selected, .memory-byte.source-selected { background: #fff176; color: #171100; opacity: 1; }
+    .memory-wat-line:focus-visible { outline: 1px solid #82b4ff; outline-offset: -1px; }
+    .memory-encoding input { width: auto; }
+    .module-magic { background: #ffba00; color: #171100; }
+    .module-section-header { background: #df292d; color: white; }
+    @media (max-width: 1000px) { .memory-panes { grid-template-columns: minmax(0, 1fr); } }
     .segment-color-0 { background: #cf2d2d; color: #fff; }
     .segment-color-1 { background: #8c3df5; color: #fff; }
     .segment-color-2 { background: #0ea5e9; color: #00101a; }
@@ -91,8 +104,39 @@
       <div class="actions"><button id="objdump">wasm-objdump</button></div>
       <pre id="objdump-output" role="status" aria-live="polite">Output from wasm-objdump -d -x will appear here.</pre>
     </section>
+    <section class="binary-translator" aria-labelledby="memory-layout-title">
+      <h2 id="memory-layout-title">3. WAST Memory Layout Explorer</h2>
+      <label for="memory-file">Upload .wast / .wat / .wasm file</label>
+      <input id="memory-file" type="file" accept=".wast,.wat,.wasm,application/wasm">
+      <div class="actions"><button id="memory-upload" type="button">upload</button><button id="memory-reset" type="button">reset</button></div>
+      <label for="memory-source-path">Loaded file path / name</label>
+      <input id="memory-source-path" placeholder="No file loaded" spellcheck="false" readonly>
+      <label for="memory-module">Module index (for multi-module WAST)</label>
+      <select id="memory-module"><option value="0">0</option></select>
+      <label for="memory-view">Address space</label>
+      <select id="memory-view">
+        <option value="module">Module binary (file offsets, like wasmcodeexplorer)</option>
+        <option value="linear">Linear memory (runtime addresses, data initialization only)</option>
+      </select>
+      <label class="memory-encoding"><input id="memory-padded-leb128" type="checkbox" checked> Reference-style LEB128 size padding (WAST/WAT only; re-inspect after changing)</label>
+      <label for="memory-bytes">Linear memory preview bytes (64-262144)</label>
+      <input id="memory-bytes" type="number" min="64" max="262144" step="64" value="1024">
+      <p class="hint">Default: Wasm file bytes with header/section colors and decoded WAT. Linear memory is a separate address space, not the module file. Uploaded .wasm bytes are preserved unchanged.</p>
+      <div class="actions"><button id="memory-layout">inspect memory layout</button></div>
+      <pre id="memory-layout-output" role="status" aria-live="polite">Upload a file, then inspect memory layout.</pre>
+      <p id="memory-layout-status" class="memory-layout-status" role="status" aria-live="polite">No memory visualization yet.</p>
+      <div id="memory-segment-legend" class="memory-segment-legend" aria-label="Memory segment legend"></div>
+      <div class="memory-jump">
+        <input id="memory-jump-address" placeholder="Jump to address, e.g. 0x10 or 16" spellcheck="false" autocomplete="off">
+        <button id="memory-jump-go" type="button">jump</button>
+      </div>
+      <div class="memory-panes">
+        <div id="memory-layout-viewport" class="memory-layout-viewport" aria-label="Scrollable memory view"></div>
+        <pre id="memory-wat" class="memory-wat" aria-label="Decoded module WAT" hidden></pre>
+      </div>
+    </section>
     <section>
-      <h2>3. AArch64 Disassembler</h2>
+      <h2>4. AArch64 Disassembler</h2>
       <label for="machine-code">32-bit instruction word</label>
       <input id="machine-code" value="0xD10043FFU" spellcheck="false">
       <p class="hint">Enter 8 hexadecimal digits, optionally prefixed with 0x and suffixed with U. Automatically converts to little-endian bytes.</p>
@@ -100,7 +144,7 @@
       <pre id="disassemble-output" role="status" aria-live="polite">Ready to disassemble.</pre>
     </section>
     <section>
-      <h2>4. AArch64 Assembler</h2>
+      <h2>5. AArch64 Assembler</h2>
       <label for="instruction">Single assembly instruction</label>
       <input id="instruction" value="sub sp, sp, #0x10" spellcheck="false">
       <p class="hint">Uses llvm-mc to display little-endian bytes and the 32-bit instruction word with a U suffix.</p>
@@ -108,7 +152,7 @@
       <pre id="assemble-output" role="status" aria-live="polite">Ready to assemble.</pre>
     </section>
     <section class="binary-translator" aria-labelledby="binary-title">
-      <h2 id="binary-title">5. AArch64 Binary to Hex</h2>
+      <h2 id="binary-title">6. AArch64 Binary to Hex</h2>
       <p class="hint" id="binary-hint">Enter 0 or 1 per box, from bit 31 to bit 0, then click translate. Four bits = one hex digit.</p>
       <div id="bit-groups" class="bit-groups" role="group" aria-label="32-bit instruction" aria-describedby="binary-hint"></div>
       <div class="actions"><button id="translate">translate</button><button id="reset">reset</button></div>
@@ -116,7 +160,7 @@
       <pre id="binary-output" role="status" aria-live="polite" aria-labelledby="binary-output-label">Fill all 32 bits and click translate.</pre>
     </section>
     <section class="radix-converter" aria-labelledby="radix-title">
-      <h2 id="radix-title">6. 32-bit Base Converter</h2>
+      <h2 id="radix-title">7. 32-bit Base Converter</h2>
       <p class="hint" id="radix-hint">Unsigned: 0-4294967295. Edit any field, then click Convert. The last edited field is the source.</p>
       <div class="radix-row">
         <label for="radix-hex">Hex</label>
@@ -132,28 +176,6 @@
       </div>
       <div class="actions"><button id="radix-convert">convert</button><button id="radix-reset">reset</button></div>
       <p id="radix-status" class="radix-status" role="status" aria-live="polite">32 bits; binary grouped by four. No server required.</p>
-    </section>
-    <section class="binary-translator" aria-labelledby="memory-layout-title">
-      <h2 id="memory-layout-title">7. WAST Memory Layout Explorer</h2>
-      <label for="memory-file">Upload .wast / .wat / .wasm file</label>
-      <input id="memory-file" type="file" accept=".wast,.wat,.wasm,application/wasm">
-      <div class="actions"><button id="memory-upload" type="button">upload</button><button id="memory-reset" type="button">reset</button></div>
-      <label for="memory-source-path">Loaded file path / name</label>
-      <input id="memory-source-path" placeholder="No file loaded" spellcheck="false" readonly>
-      <label for="memory-module">Module index (for multi-module WAST)</label>
-      <select id="memory-module"><option value="0">0</option></select>
-      <label for="memory-bytes">Preview bytes (64-262144)</label>
-      <input id="memory-bytes" type="number" min="64" max="262144" step="64" value="1024">
-      <p class="hint">Like wasmcodeexplorer: upload a WAST containing module definitions, then inspect linear memory initialization and data segment placement.</p>
-      <div class="actions"><button id="memory-layout">inspect memory layout</button></div>
-      <pre id="memory-layout-output" role="status" aria-live="polite">Upload a file, then inspect memory layout.</pre>
-      <p id="memory-layout-status" class="memory-layout-status" role="status" aria-live="polite">No memory visualization yet.</p>
-      <div id="memory-segment-legend" class="memory-segment-legend" aria-label="Memory segment legend"></div>
-      <div class="memory-jump">
-        <input id="memory-jump-address" placeholder="Jump to address, e.g. 0x10 or 16" spellcheck="false" autocomplete="off">
-        <button id="memory-jump-go" type="button">jump</button>
-      </div>
-      <div id="memory-layout-viewport" class="memory-layout-viewport" aria-label="Scrollable memory view"></div>
     </section>
   </div>
   <script>
@@ -205,7 +227,12 @@
       if (/^[0-9]+$/i.test(value)) return Number.parseInt(value, 10);
       throw new Error('Address must be decimal digits or hexadecimal with 0x prefix.');
     }
-    const memoryViewState = { byteLength: 0, rows: new Map() };
+    const memoryViewState = { byteLength: 0, rows: new Map(), layout: null, highlightRanges: null };
+    function scrollMemoryRow(row) {
+      const viewport = $('memory-layout-viewport');
+      const header = viewport.querySelector('.memory-header');
+      viewport.scrollTo({ top: Math.max(0, row.offsetTop - header.offsetHeight), behavior: 'smooth' });
+    }
     const memoryUploadState = { filename: '', contentBase64: '' };
     function setMemoryModuleOptions(modules) {
       if (!modules?.length) {
@@ -223,6 +250,10 @@
       $('memory-layout-viewport').replaceChildren();
       memoryViewState.byteLength = 0;
       memoryViewState.rows.clear();
+      memoryViewState.layout = null;
+      memoryViewState.highlightRanges = null;
+      $('memory-wat').textContent = '';
+      $('memory-wat').hidden = true;
       $('memory-layout-status').textContent = message;
     }
     function clearMemoryUpload(message = 'Reset. Select a file and click "upload", or run wast2json to auto-load the same source.') {
@@ -231,6 +262,7 @@
       $('memory-file').value = '';
       $('memory-source-path').value = '';
       $('memory-jump-address').value = '';
+      $('memory-view').value = 'module';
       setMemoryModuleOptions([]);
       display('memory-layout-output', message);
       clearMemoryView('No memory visualization yet.');
@@ -252,7 +284,7 @@
       const rowAddress = address - (address % 16);
       const row = memoryViewState.rows.get(rowAddress);
       if (!row) throw new Error('Address row is unavailable in current preview.');
-      $('memory-layout-viewport').scrollTo({ top: Math.max(0, row.offsetTop - 8), behavior: 'smooth' });
+      scrollMemoryRow(row);
       $('memory-layout-status').textContent = `Jumped to 0x${address.toString(16)} (row 0x${rowAddress.toString(16)}).`;
     }
     function renderByteLayout({ bytes, ranges, readyMessage, emptyMessage }) {
@@ -262,25 +294,41 @@
       legend.replaceChildren();
       memoryViewState.byteLength = bytes.length;
       memoryViewState.rows.clear();
+      memoryViewState.highlightRanges = null;
       if (!bytes.length) {
         $('memory-layout-status').textContent = emptyMessage;
         return;
       }
       const owner = new Int32Array(bytes.length).fill(-1);
+      const rangeColors = new Map(ranges.map(range => [range.id, range.color || segmentColor(range.id)]));
       for (const range of ranges) {
         const start = Math.max(0, range.start);
         const end = Math.min(bytes.length, range.start + range.size);
         for (let i = start; i < end; i++) owner[i] = range.id;
       }
       let activeRange = null;
+      let sourceRanges = null;
       const byteElements = [];
       const updateHighlight = () => {
         for (const element of byteElements) {
-          const sameRange = activeRange === null || Number(element.dataset.segment) === activeRange;
+          const offset = Number(element.dataset.offset);
+          const sourceSelected = sourceRanges?.some(range => offset >= range.start && offset < range.end);
+          const sameRange = sourceRanges ? sourceSelected : activeRange === null || Number(element.dataset.segment) === activeRange;
           element.classList.toggle('faded', !sameRange);
+          element.classList.toggle('source-selected', Boolean(sourceSelected));
         }
         for (const button of legend.querySelectorAll('button')) {
           button.classList.toggle('active', Number(button.dataset.segment) === activeRange);
+        }
+      };
+      memoryViewState.highlightRanges = selected => {
+        sourceRanges = selected;
+        activeRange = null;
+        updateHighlight();
+        if (selected?.length) {
+          const start = Math.min(...selected.map(range => range.start));
+          const row = memoryViewState.rows.get(start - start % 16);
+          if (row) scrollMemoryRow(row);
         }
       };
       for (const range of ranges) {
@@ -288,8 +336,12 @@
         button.type = 'button';
         button.className = 'memory-segment';
         button.dataset.segment = String(range.id);
-        button.innerHTML = `<span class="memory-segment-swatch ${segmentColor(range.id)}"></span>${range.label}`;
+        const swatch = document.createElement('span');
+        swatch.className = `memory-segment-swatch ${rangeColors.get(range.id)}`;
+        button.append(swatch, range.label);
         button.addEventListener('click', () => {
+          sourceRanges = null;
+          for (const line of $('memory-wat').querySelectorAll('.selected')) line.classList.remove('selected');
           activeRange = activeRange === range.id ? null : range.id;
           updateHighlight();
           if (activeRange !== null) {
@@ -297,13 +349,30 @@
             if (Number.isInteger(startAddress) && startAddress >= 0 && startAddress < bytes.length) {
               const rowAddress = startAddress - (startAddress % 16);
               const row = memoryViewState.rows.get(rowAddress);
-              if (row) viewport.scrollTo({ top: Math.max(0, row.offsetTop - 8), behavior: 'smooth' });
+              if (row) scrollMemoryRow(row);
             }
           }
         });
         legend.append(button);
       }
       const fragment = document.createDocumentFragment();
+      const header = document.createElement('div');
+      header.className = 'memory-row memory-header';
+      const addressHeader = document.createElement('span');
+      addressHeader.className = 'memory-address';
+      addressHeader.textContent = 'Address';
+      const hexHeader = document.createElement('div');
+      hexHeader.className = 'memory-hex';
+      for (let column = 0; column < 16; column++) {
+        const label = document.createElement('span');
+        label.className = `memory-column${column % 8 === 7 ? ' block-gap' : ''}`;
+        label.textContent = column.toString(16).toUpperCase().padStart(2, '0');
+        hexHeader.append(label);
+      }
+      const asciiHeader = document.createElement('span');
+      asciiHeader.textContent = 'ASCII';
+      header.append(addressHeader, hexHeader, asciiHeader);
+      fragment.append(header);
       for (let rowStart = 0; rowStart < bytes.length; rowStart += 16) {
         const row = document.createElement('div');
         row.className = 'memory-row';
@@ -318,16 +387,18 @@
         for (let i = rowStart; i < Math.min(rowStart + 16, bytes.length); i++) {
           const rangeId = owner[i];
           const hexByte = document.createElement('span');
-          hexByte.className = `memory-byte ${rangeId >= 0 ? segmentColor(rangeId) : ''}`.trim();
+          hexByte.className = `memory-byte ${rangeId >= 0 ? rangeColors.get(rangeId) : ''}`.trim();
           if ((i - rowStart) % 8 === 7) hexByte.classList.add('block-gap');
           hexByte.dataset.segment = String(rangeId);
+          hexByte.dataset.offset = String(i);
           hexByte.textContent = bytes[i].toString(16).padStart(2, '0');
           byteElements.push(hexByte);
           hex.append(hexByte);
           const asciiByte = document.createElement('span');
-          asciiByte.className = `memory-byte ascii ${rangeId >= 0 ? segmentColor(rangeId) : ''}`.trim();
+          asciiByte.className = 'memory-byte ascii';
           if ((i - rowStart) % 8 === 7) asciiByte.classList.add('block-gap');
           asciiByte.dataset.segment = String(rangeId);
+          asciiByte.dataset.offset = String(i);
           asciiByte.textContent = bytes[i] >= 0x20 && bytes[i] <= 0x7E ? String.fromCharCode(bytes[i]) : '.';
           byteElements.push(asciiByte);
           ascii.append(asciiByte);
@@ -339,8 +410,50 @@
       $('memory-layout-status').textContent = readyMessage;
       updateHighlight();
     }
+    function renderWatLines(layout) {
+      const pane = $('memory-wat');
+      pane.replaceChildren();
+      const fragment = document.createDocumentFragment();
+      for (const [index, text] of layout.moduleWat.trimEnd().split('\n').entries()) {
+        const line = document.createElement('span');
+        line.className = 'memory-wat-line';
+        line.tabIndex = 0;
+        line.textContent = text || ' ';
+        const mapping = layout.moduleSourceMap[index];
+        line.title = mapping.ranges.length
+          ? `Select corresponding bytes (${mapping.granularity}-level mapping)`
+          : 'No separate binary range is mapped for this line.';
+        line.addEventListener('click', () => {
+          for (const other of pane.querySelectorAll('.selected')) other.classList.remove('selected');
+          line.classList.add('selected');
+          memoryViewState.highlightRanges?.(mapping.ranges.length ? mapping.ranges : null);
+          display('memory-layout-status', mapping.ranges.length
+            ? `${mapping.granularity === 'section' ? 'Section-level highlight (not an individual entry)' : 'Selected code bytes'}: ${mapping.ranges.map(range => `0x${range.start.toString(16)}-0x${(range.end - 1).toString(16)}`).join(', ')}.`
+            : 'No separate binary range is mapped for this line.');
+        });
+        line.addEventListener('keydown', event => {
+          if (event.key === 'Enter' || event.key === ' ') {
+            event.preventDefault();
+            line.click();
+          } else if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
+            event.preventDefault();
+            const next = event.key === 'ArrowDown' ? line.nextElementSibling : line.previousElementSibling;
+            if (next) { next.focus(); next.click(); }
+          }
+        });
+        fragment.append(line);
+      }
+      pane.append(fragment);
+    }
     function renderMemoryLayout(layout) {
-      if (layout.previewBytesBase64 && layout.previewLength) {
+      if (!Array.isArray(layout.moduleSourceMap)) {
+        throw new Error(`Explorer API is outdated. Restart the server on port ${location.port}, reload this page, and inspect again.`);
+      }
+      memoryViewState.layout = layout;
+      const linear = $('memory-view').value === 'linear';
+      renderWatLines(layout);
+      $('memory-wat').hidden = linear;
+      if (linear) {
         const bytes = decodeBase64(layout.previewBytesBase64);
         const ranges = layout.segments
           .filter(segment => segment.memoryIndex === 0)
@@ -354,22 +467,33 @@
           bytes,
           ranges,
           readyMessage: 'Linear memory view ready. Click a segment chip to focus and jump, or use address jump.',
-          emptyMessage: 'No previewable memory bytes. This module may import memory.',
+          emptyMessage: 'No linear memory preview is available. Select Module binary to inspect the file bytes.',
         });
         return;
       }
       if (layout.moduleBytesBase64) {
         const bytes = decodeBase64(layout.moduleBytesBase64);
-        const ranges = (layout.moduleSections || []).map((section, index) => ({
-          id: index,
-          start: section.start,
-          size: section.size,
-          label: `${section.name} 0x${section.start.toString(16)}..0x${Math.max(section.start, section.end - 1).toString(16)} (${section.size}B)`,
-        }));
+        const ranges = [{ id: 0, start: 0, size: 8, label: 'Magic + version (8B)', color: 'module-magic' }];
+        const colors = { Type: 1, Import: 5, Function: 1, Memory: 3, Export: 1, Code: 4, Data: 2 };
+        for (const section of layout.moduleSections) {
+          ranges.push({
+            id: ranges.length,
+            start: section.headerStart,
+            size: section.start - section.headerStart,
+            label: `${section.name} header @ 0x${section.headerStart.toString(16)}`,
+            color: 'module-section-header',
+          }, {
+            id: ranges.length + 1,
+            start: section.start,
+            size: section.size,
+            label: `${section.name} payload 0x${section.start.toString(16)}..0x${Math.max(section.start, section.end - 1).toString(16)} (${section.size}B)`,
+            color: segmentColor(colors[section.name] ?? 6),
+          });
+        }
         renderByteLayout({
           bytes,
           ranges,
-          readyMessage: 'Module byte layout shown (no linear memory defined). Click a section chip to focus and jump, or use address jump.',
+          readyMessage: `Module binary: ${bytes.length} bytes. Addresses are file offsets, not linear memory addresses. Click a section to focus and jump.`,
           emptyMessage: 'Module byte view is unavailable for this file.',
         });
         return;
@@ -391,7 +515,7 @@
       try {
         loaded = await api('memory-load-source', { source });
       } catch (error) {
-        autoLoadWarning = `\nNote: section 7 auto-load is unavailable (${error.message}). You can still use section 7 by selecting a file and clicking "upload".`;
+        autoLoadWarning = `\nNote: section 3 auto-load is unavailable (${error.message}). You can still use section 3 by selecting a file and clicking "upload".`;
       }
       $('module').replaceChildren(...result.modules.map(name => new Option(name, name)));
       if (!result.modules.length) $('module').add(new Option('No modules generated for disassembly', ''));
@@ -427,7 +551,7 @@
     });
     bind('memory-layout', 'memory-layout-output', async () => {
       if (!memoryUploadState.filename || !memoryUploadState.contentBase64) {
-        throw new Error('Load a file first: click "upload" in section 7, or run wast2json to auto-load the same source.');
+        throw new Error('Load a file first: click "upload" in section 3, or run wast2json to auto-load the same source.');
       }
       const moduleIndex = Number.parseInt($('memory-module').value, 10);
       const maxBytes = Number.parseInt($('memory-bytes').value, 10);
@@ -442,6 +566,7 @@
         contentBase64: memoryUploadState.contentBase64,
         moduleIndex,
         maxBytes,
+        paddedLeb128: $('memory-padded-leb128').checked,
       });
       $('memory-module').replaceChildren(...result.modules.map(module =>
         new Option(`${module.index}: ${module.name}`, String(module.index))));
@@ -450,9 +575,9 @@
       const header = [
         `Module: ${result.modules[result.selectedModule].name}`,
         layout.initialPages === null
-          ? 'Memory: not defined in module (possibly imported). Showing module byte layout.'
+          ? 'Linear memory: not defined in module (possibly imported). Module binary is still available.'
           : `Memory: initial=${layout.initialPages} page(s)${layout.maxPages === null ? '' : `, max=${layout.maxPages}`} (${layout.byteLength} bytes total)`,
-        `Preview bytes: ${layout.previewLength}`,
+        `Linear memory preview bytes: ${layout.previewLength}`,
         layout.moduleSize ? `Module bytes: ${layout.moduleSize}` : '',
       ];
       const segments = layout.segments.length
@@ -462,6 +587,10 @@
       const warnings = layout.warnings.length ? ['Warnings:', ...layout.warnings.map(item => `  - ${item}`)] : [];
       display('memory-layout-output', [...header, '', ...segments, ...(warnings.length ? ['', ...warnings] : [])].join('\n'));
       renderMemoryLayout(layout);
+    });
+    $('memory-view').addEventListener('change', () => {
+      $('memory-jump-address').value = '';
+      if (memoryViewState.layout) renderMemoryLayout(memoryViewState.layout);
     });
     $('memory-file').addEventListener('change', () => {
       const file = $('memory-file').files?.[0];

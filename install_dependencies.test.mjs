@@ -22,7 +22,7 @@ async function fixture(t) {
     await executable('node', oldNode
       ? 'if [[ "$1" == "--version" ]]; then echo v18.16.0; else exit 1; fi'
       : 'if [[ "$1" == "--version" ]]; then echo v22.0.0; fi');
-    for (const name of ['wast2json', 'wasm-objdump', 'llvm-mc', 'aarch64-linux-gnu-objdump']) {
+    for (const name of ['wast2json', 'wasm-objdump', 'wasm2wat', 'llvm-mc', 'aarch64-linux-gnu-objdump']) {
       await executable(name, `echo '${name} test version'`);
     }
   }

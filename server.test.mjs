@@ -160,6 +160,84 @@ test('toolbox integration with installed command-line tools', async t => {
     assert.ok(result.memoryLayout.moduleBytesBase64.length > 0);
     assert.ok(result.memoryLayout.moduleSections.length > 0);
   });
+  await t.test('reference-style module bytes remain distinct from initialized linear memory', async () => {
+    const source = `(module
+      (type $type0 (func (param i32)))
+      (type $type1 (func))
+      (func $import0 (import "sys" "print") (param i32))
+      (memory $memory0 200 200)
+      (export "memory" (memory $memory0))
+      (export "main" (func $func1))
+      (func $func1 i32.const 0 call $import0)
+      (data (i32.const 0) "Hello, world\\00"))`;
+    const result = await api('memory-layout', {
+      filename: 'reference.wast',
+      contentBase64: Buffer.from(source).toString('base64'),
+      paddedLeb128: true,
+    });
+    const layout = result.memoryLayout;
+    const bytes = Buffer.from(layout.moduleBytesBase64, 'base64');
+    assert.equal(bytes.length, 127);
+    assert.equal(bytes.subarray(0, 14).toString('hex'), '0061736d01000000018880808000');
+    assert.equal(bytes.subarray(0x72).toString(), 'Hello, world\0');
+    assert.equal(Buffer.from(layout.previewBytesBase64, 'base64').subarray(0, 13).toString(), 'Hello, world\0');
+    assert.match(layout.moduleWat, /\(import "sys" "print"/);
+    assert.match(layout.moduleWat, /\(memory .*200 200\)/);
+    assert.match(layout.moduleWat, /Hello, world\\00/);
+    const watLines = layout.moduleWat.split('\n');
+    function mappedBytes(pattern) {
+      const line = watLines.findIndex(text => pattern.test(text));
+      assert.notEqual(line, -1, String(pattern));
+      const mapping = layout.moduleSourceMap[line];
+      assert.notEqual(mapping.granularity, 'section', String(pattern));
+      return Buffer.concat(mapping.ranges.map(range => bytes.subarray(range.start, range.end)));
+    }
+    assert.equal(mappedBytes(/^  \(memory /).toString('hex'), '0101c801c801');
+    assert.equal(mappedBytes(/^\s+i32\.const /).toString('hex'), '4100');
+    assert.equal(mappedBytes(/^\s+call /).toString('hex'), '1000');
+    const memoryExport = mappedBytes(/^  \(export "memory"/);
+    const mainExport = mappedBytes(/^  \(export "main"/);
+    assert.ok(memoryExport.includes(Buffer.from('memory')));
+    assert.ok(!memoryExport.includes(Buffer.from('main')));
+    assert.ok(mainExport.includes(Buffer.from('main')));
+    assert.ok(!mainExport.includes(Buffer.from('memory')));
+    let end = 8;
+    for (const section of layout.moduleSections) {
+      assert.equal(section.headerStart, end);
+      assert.ok(section.start > section.headerStart);
+      assert.equal(section.size, section.end - section.start);
+      end = section.end;
+    }
+    assert.equal(end, bytes.length);
+    const binary = await api('memory-layout', {
+      filename: 'unchanged.wasm',
+      contentBase64: layout.moduleBytesBase64,
+      paddedLeb128: true,
+    });
+    assert.equal(binary.memoryLayout.moduleBytesBase64, layout.moduleBytesBase64);
+  });
+  await t.test('code mappings distinguish functions, locals, control instructions and large immediates', async () => {
+    const result = await api('memory-layout', {
+      filename: 'instructions.wat',
+      contentBase64: Buffer.from(`(module
+        (func (param i32) (result i32) (local i64)
+          block
+            local.get 0
+            drop
+          end
+          i32.const 123456)
+        (func (result i32) i32.const 7))`).toString('base64'),
+    });
+    const layout = result.memoryLayout;
+    const bytes = Buffer.from(layout.moduleBytesBase64, 'base64');
+    const selections = layout.moduleWat.split('\n').flatMap((text, line) => {
+      if (!/^\s+(?:local\.get|i32\.const|block|drop|end)\b/.test(text)) return [];
+      const mapping = layout.moduleSourceMap[line];
+      assert.equal(mapping.granularity, 'instruction', text);
+      return [Buffer.concat(mapping.ranges.map(range => bytes.subarray(range.start, range.end))).toString('hex')];
+    });
+    assert.deepEqual(selections, ['0240', '2000', '1a', '0b', '41c0c407', '4107']);
+  });
   await t.test('invalid inputs and tool errors are visible', async () => {
     for (const code of ['0x123U', '0xD10043FF00U', 'FF 43 00 D1', 'not hex']) {
       assert.match((await api('disassemble', { code }, 400)).error, /8-digit hexadecimal/);

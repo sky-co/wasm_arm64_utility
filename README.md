@@ -27,7 +27,7 @@ PORT=8081 node server.mjs
 | --- | --- |
 | Bash | `bash` |
 | Node.js >= 18.17 (maintained LTS recommended) | `nodejs` |
-| WABT: `wast2json`, `wasm-objdump` | `wabt` |
+| WABT: `wast2json`, `wasm-objdump`, `wasm2wat` | `wabt` |
 | LLVM with AArch64: `llvm-mc` | `llvm` |
 | AArch64 binutils: `aarch64-linux-gnu-objdump` | `binutils-aarch64-linux-gnu` |
 | Modern browser | Chrome / Edge / Firefox |
@@ -51,7 +51,7 @@ Keep all commands on PATH. No npm packages, Python, QEMU, or ARM64 hardware requ
 | **Base Converter** → **convert** | Hex field: `0xD10043FF` | Decimal `3506455551`; binary `1101 0001 0000 0000 0100 0011 1111 1111` |
 | **Base Converter** → **convert** | Decimal field: `16`, or binary field: `0001 0000` | Hex `0x00000010`; decimal `16`; binary `0000 0000 0000 0000 0000 0000 0001 0000` |
 | **Base Converter** → **reset** | Any values in Hex/Decimal/Binary | Hex `0x00000000`; decimal `0`; binary `0000 0000 0000 0000 0000 0000 0000 0000` |
-| **WAST Memory Layout Explorer** | Upload `layout.wast`, choose module, inspect | If linear memory exists: shows memory bytes + data-segment highlight. If not: shows module byte layout + section highlight |
+| **WAST Memory Layout Explorer** | Upload `layout.wast`, choose module, inspect | Defaults to module file bytes with header/section colors and decoded WAT; switch to linear memory for data-segment initialization |
 
 ### Wasm workflow
 
@@ -63,9 +63,15 @@ Upload WAST/WAT/WASM ───────────────────�
 
 ### Memory layout explorer workflow
 
-- In section 7, selecting a file does not load content immediately; click **upload** to load it.
-- Click **reset** to clear section 7 file state, module options, memory view, and jump state.
-- Running **wast2json** in section 1 now auto-loads the same source file into section 7 by default.
+- **Module binary** is the default even when the module defines memory: offsets refer to the Wasm file (starting with `00 61 73 6D 01 00 00 00`), not runtime memory. The right pane shows WAT decoded from the selected binary.
+- Click a decoded WAT line (or focus it and use Enter/Space or Up/Down) to highlight and scroll to its corresponding file bytes. Type/import/table/memory/export declarations and function headers/instructions have entry/instruction mappings; other declarations are explicitly labeled **section-level**. Unmapped formatting lines report that no separate range is available. For example, `(memory ... 200 200)` in a single-memory module selects `01 01 C8 01 C8 01`, not the section ID/size header. This maps decoded WAT, not original WAST comments, whitespace, or script assertions.
+- **Linear memory** shows only static data initialization and zero-filled bytes, not execution results. Its addresses and length are independent of file offsets.
+- **Reference-style LEB128 size padding** is enabled by default for explorer WAST/WAT compilation to match the reference site's five-byte size fields. Disable it and re-inspect for compact encoding. This does not change section 1 conversion, and uploaded `.wasm` files are always shown byte-for-byte unchanged.
+- The byte view has a sticky **Address / 00-0F / ASCII** header and a pinned address column when scrolling horizontally. Address jumps and section/segment navigation keep the target row below the header.
+
+- In section 3 (below wast2json and wasm-objdump), selecting a file does not load content immediately; click **upload** to load it.
+- Click **reset** to clear section 3 file state, module options, memory view, and jump state.
+- Running **wast2json** in section 1 now auto-loads the same source file into section 3 by default.
 
 Absolute paths, project-relative paths, and HTTP(S) URLs are supported, including multi-module WAST.
 Local conversion may overwrite outputs beside the source; remote files use temporary storage cleaned up on normal exit.
