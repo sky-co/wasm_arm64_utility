@@ -5,37 +5,40 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>WebAssembly / AArch64 Toolbox</title>
   <style>
-    :root { color-scheme: light; font-family: system-ui, sans-serif; color: #17243b; background: #f0f4fa; }
+    :root { color-scheme: light; font-family: "SF Pro Text", "SF Pro Display", -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif; color: #1d1d1f; background: #f5f5f7; }
     * { box-sizing: border-box; }
-    body { margin: 0 auto; max-width: 1440px; padding: 20px; }
-    h1 { margin: 0 0 8px; font-size: 28px; }
-    h2 { margin: 0 0 12px; font-size: 18px; }
-    p, label { line-height: 1.6; }
-    .intro, .hint { color: #526179; }
-    .grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; }
-    section { min-width: 0; padding: 16px; background: white; border: 1px solid #d6dfec; border-radius: 10px; }
-    label { display: block; margin: 12px 0 6px; font-weight: 600; }
-    input, select, textarea { width: 100%; padding: 10px; border: 1px solid #9aabc2; border-radius: 6px; font: 14px ui-monospace, monospace; }
-    textarea { min-height: 76px; resize: vertical; }
-    button { padding: 10px 16px; border: 0; border-radius: 6px; background: #1958bb; color: white; cursor: pointer; font-weight: 600; }
+    body { margin: 0 auto; max-width: 1360px; padding: 14px; }
+    h1 { margin: 0 0 6px; font-size: 26px; letter-spacing: -.01em; font-weight: 650; }
+    h2 { margin: 0 0 10px; font-size: 17px; letter-spacing: -.005em; font-weight: 630; }
+    p, label { line-height: 1.45; }
+    .intro, .hint { color: #6e6e73; }
+    .intro { margin: 0 0 10px; }
+    .grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+    section { min-width: 0; padding: 13px; background: #fff; border: 1px solid #e5e5ea; border-radius: 12px; box-shadow: 0 1px 2px rgb(0 0 0 / 3%); }
+    label { display: block; margin: 8px 0 4px; font-weight: 600; color: #3a3a3c; }
+    input, select, textarea { width: 100%; padding: 8px 9px; border: 1px solid #d2d2d7; border-radius: 8px; font: 13px ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; color: #1d1d1f; background: #fff; }
+    input:focus, select:focus, textarea:focus { outline: 2px solid #c7def8; outline-offset: 0; border-color: #8ab4f8; }
+    textarea { min-height: 70px; resize: vertical; }
+    button { padding: 8px 12px; border: 1px solid #7eaee4; border-radius: 999px; background: linear-gradient(#9cc4f0, #86b5ea); color: #fff; cursor: pointer; font-weight: 600; }
     button:disabled { opacity: .5; cursor: wait; }
-    .actions { display: flex; flex-wrap: wrap; gap: 8px; margin: 10px 0; align-items: center; }
-    pre { margin: 10px 0 0; padding: 12px; min-height: 64px; max-height: 380px; overflow: auto; white-space: pre-wrap; overflow-wrap: anywhere; background: #101d32; color: #deebff; border-radius: 6px; font: 13px/1.6 ui-monospace, monospace; }
-    pre.error { color: #ffb9b9; }
-    .hint { font-size: 13px; margin-bottom: 0; overflow-wrap: anywhere; }
+    button:hover:not(:disabled) { background: linear-gradient(#90bbea, #79ade6); border-color: #6fa5df; }
+    .actions { display: flex; flex-wrap: wrap; gap: 6px; margin: 8px 0; align-items: center; }
+    pre { margin: 8px 0 0; padding: 10px; min-height: 56px; max-height: 360px; overflow: auto; white-space: pre-wrap; overflow-wrap: anywhere; background: #fafafa; color: #2c2c2e; border: 1px solid #e5e5ea; border-radius: 8px; font: 12px/1.5 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+    pre.error { color: #b42318; background: #fff5f5; border-color: #f0c7c7; }
+    .hint { font-size: 12px; margin-bottom: 0; overflow-wrap: anywhere; }
     .binary-translator, .radix-converter { grid-column: 1 / -1; }
-    .radix-row { display: grid; grid-template-columns: 80px minmax(0, 1fr); gap: 8px; align-items: center; margin-top: 8px; }
+    .radix-row { display: grid; grid-template-columns: 76px minmax(0, 1fr); gap: 6px; align-items: center; margin-top: 6px; }
     .radix-row label { margin: 0; }
     .radix-row input { min-width: 0; }
     input[aria-invalid="true"] { border-color: #b42318; }
-    .radix-status { margin: 8px 0 0; font-size: 13px; color: #526179; }
+    .radix-status { margin: 6px 0 0; font-size: 12px; color: #6e6e73; }
     .radix-status.error { color: #b42318; }
-    .bit-groups { display: grid; grid-template-columns: repeat(8, minmax(0, 1fr)); gap: 8px; margin-top: 12px; }
-    .bit-group { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 4px; padding: 8px; border: 1px solid #d6dfec; border-radius: 6px; }
-    .bit-group label { margin: 0; text-align: center; font: 12px/1.6 ui-monospace, monospace; color: #526179; }
-    .bit-group input { padding: 8px 0; text-align: center; }
-    .nibble-hex { grid-column: 1 / -1; text-align: center; padding-top: 8px; font: 600 18px ui-monospace, monospace; }
-    .memory-layout-status { margin: 8px 0 0; font-size: 13px; color: #526179; }
+    .bit-groups { display: grid; grid-template-columns: repeat(8, minmax(0, 1fr)); gap: 6px; margin-top: 8px; }
+    .bit-group { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 3px; padding: 7px; border: 1px solid #e5e5ea; border-radius: 8px; background: #fff; }
+    .bit-group label { margin: 0; text-align: center; font: 11px/1.4 ui-monospace, monospace; color: #6e6e73; }
+    .bit-group input { padding: 6px 0; text-align: center; }
+    .nibble-hex { grid-column: 1 / -1; text-align: center; padding-top: 6px; font: 600 16px ui-monospace, monospace; }
+    .memory-layout-status { margin: 6px 0 0; font-size: 12px; color: #6e6e73; }
     .memory-segment-legend { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; }
     .memory-segment { display: inline-flex; align-items: center; gap: 6px; padding: 2px 8px; border: 1px solid #2d3f60; border-radius: 4px; background: #15233a; color: #deebff; cursor: pointer; font: 12px ui-monospace, monospace; }
     .memory-segment.active { border-color: #82b4ff; box-shadow: 0 0 0 1px #82b4ff inset; }
@@ -49,15 +52,12 @@
     .memory-hex, .memory-ascii { display: flex; gap: 1px; min-width: 0; }
     .memory-byte { display: inline-flex; flex: 0 0 22px; justify-content: center; border-radius: 0; background: #0f1a2b; color: #f8fbff; padding: 2px 0; }
     .memory-byte.ascii { flex-basis: 12px; background: transparent; padding: 0; }
-    .memory-byte.faded { opacity: .22; }
+    .memory-byte.faded { opacity: .42; }
     .block-gap { margin-right: 3px; }
-    .memory-jump { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 8px; margin-top: 10px; }
-    .memory-jump input { margin: 0; }
-    .memory-jump button { white-space: nowrap; }
     .memory-panes { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 8px; margin-top: 10px; }
     .memory-panes .memory-layout-viewport { margin-top: 0; }
-    .memory-wat { margin: 0; min-height: 120px; max-height: 420px; white-space: pre; overflow-wrap: normal; border: 1px solid #2b3f61; background: #0b111a; }
-    .memory-wat-line { display: block; width: max-content; min-width: 100%; cursor: pointer; }
+    .memory-wat { margin: 0; min-height: 120px; max-height: 420px; white-space: pre; overflow-wrap: normal; border: 1px solid #2b3f61; background: #0b111a; color: #9cb3cf; }
+    .memory-wat-line { display: block; width: max-content; min-width: 100%; cursor: pointer; color: #9cb3cf; }
     .memory-wat-line.selected, .memory-byte.source-selected { background: #fff176; color: #171100; opacity: 1; }
     .memory-wat-line:focus-visible { outline: 1px solid #82b4ff; outline-offset: -1px; }
     .memory-encoding input { width: auto; }
@@ -73,7 +73,7 @@
     .segment-color-6 { background: #f97316; color: #180900; }
     .segment-color-7 { background: #ec4899; color: #1a0310; }
     @media (max-width: 1200px) { .bit-groups { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
-    @media (max-width: 800px) { body { padding: 16px; } .grid { grid-template-columns: 1fr; } }
+    @media (max-width: 800px) { body { padding: 12px; } .grid { grid-template-columns: 1fr; } }
     @media (max-width: 600px) {
       .radix-converter { padding: 12px; }
       .radix-row { grid-template-columns: minmax(0, 1fr); margin-top: 12px; }
@@ -87,36 +87,36 @@
   <p class="intro">Wasm inspection (including uploaded WAST memory layout), AArch64 assembly/disassembly, and 32-bit number conversion.</p>
   <div class="grid">
     <section>
-      <h2>1. wast2json</h2>
+      <h2>wast2json</h2>
       <label for="source">Local path or remote URL</label>
-      <input id="source" placeholder="Chapter02/local.wast" value="Chapter02/local.wast" spellcheck="false">
+      <input id="source" spellcheck="false">
       <p class="hint">Paths are relative to the project root. Supports .wast / .wat / .wasm files and HTTP(S) URLs.</p>
       <div class="actions"><button id="convert">wast2json</button></div>
       <p class="hint">Local conversion creates or overwrites the matching JSON and numbered Wasm files next to the source. Remote files are saved in the service's temporary directory.</p>
       <pre id="convert-output" role="status" aria-live="polite">Ready to convert.</pre>
     </section>
     <section>
-      <h2>2. wasm-objdump</h2>
+      <h2>wasm-objdump</h2>
       <label for="module">Generated modules</label>
       <select id="module"><option value="">Convert a WAST file first, or enter a Wasm path below</option></select>
       <label for="wasm-source">Wasm path / URL (leave empty to use the selected module)</label>
-      <input id="wasm-source" placeholder="Chapter02/local.0.wasm" spellcheck="false">
+      <input id="wasm-source" spellcheck="false">
       <div class="actions"><button id="objdump">wasm-objdump</button></div>
       <pre id="objdump-output" role="status" aria-live="polite">Output from wasm-objdump -d -x will appear here.</pre>
     </section>
     <section class="binary-translator" aria-labelledby="memory-layout-title">
-      <h2 id="memory-layout-title">3. WAST Memory Layout Explorer</h2>
+      <h2 id="memory-layout-title">WAST Memory Layout Explorer</h2>
       <label for="memory-file">Upload .wast / .wat / .wasm file</label>
       <input id="memory-file" type="file" accept=".wast,.wat,.wasm,application/wasm">
       <div class="actions"><button id="memory-upload" type="button">upload</button><button id="memory-reset" type="button">reset</button></div>
-      <label for="memory-source-path">Loaded file path / name</label>
-      <input id="memory-source-path" placeholder="No file loaded" spellcheck="false" readonly>
+      <label for="memory-source-path">Local file path / name</label>
+      <input id="memory-source-path" spellcheck="false" readonly>
       <label for="memory-module">Module index (for multi-module WAST)</label>
       <select id="memory-module"><option value="0">0</option></select>
       <label for="memory-view">Address space</label>
       <select id="memory-view">
-        <option value="module">Module binary (file offsets, like wasmcodeexplorer)</option>
-        <option value="linear">Linear memory (runtime addresses, data initialization only)</option>
+        <option value="module">Module binary</option>
+        <option value="linear">Linear memory</option>
       </select>
       <label class="memory-encoding"><input id="memory-padded-leb128" type="checkbox" checked> Reference-style LEB128 size padding (WAST/WAT only; re-inspect after changing)</label>
       <label for="memory-bytes">Linear memory preview bytes (64-262144)</label>
@@ -126,17 +126,13 @@
       <pre id="memory-layout-output" role="status" aria-live="polite">Upload a file, then inspect memory layout.</pre>
       <p id="memory-layout-status" class="memory-layout-status" role="status" aria-live="polite">No memory visualization yet.</p>
       <div id="memory-segment-legend" class="memory-segment-legend" aria-label="Memory segment legend"></div>
-      <div class="memory-jump">
-        <input id="memory-jump-address" placeholder="Jump to address, e.g. 0x10 or 16" spellcheck="false" autocomplete="off">
-        <button id="memory-jump-go" type="button">jump</button>
-      </div>
       <div class="memory-panes">
         <div id="memory-layout-viewport" class="memory-layout-viewport" aria-label="Scrollable memory view"></div>
         <pre id="memory-wat" class="memory-wat" aria-label="Decoded module WAT" hidden></pre>
       </div>
     </section>
     <section>
-      <h2>4. AArch64 Disassembler</h2>
+      <h2>AArch64 Disassembler</h2>
       <label for="machine-code">32-bit instruction word</label>
       <input id="machine-code" value="0xD10043FFU" spellcheck="false">
       <p class="hint">Enter 8 hexadecimal digits, optionally prefixed with 0x and suffixed with U. Automatically converts to little-endian bytes.</p>
@@ -144,7 +140,7 @@
       <pre id="disassemble-output" role="status" aria-live="polite">Ready to disassemble.</pre>
     </section>
     <section>
-      <h2>5. AArch64 Assembler</h2>
+      <h2>AArch64 Assembler</h2>
       <label for="instruction">Single assembly instruction</label>
       <input id="instruction" value="sub sp, sp, #0x10" spellcheck="false">
       <p class="hint">Uses llvm-mc to display little-endian bytes and the 32-bit instruction word with a U suffix.</p>
@@ -152,7 +148,7 @@
       <pre id="assemble-output" role="status" aria-live="polite">Ready to assemble.</pre>
     </section>
     <section class="binary-translator" aria-labelledby="binary-title">
-      <h2 id="binary-title">6. AArch64 Binary to Hex</h2>
+      <h2 id="binary-title">AArch64 Binary to Hex</h2>
       <p class="hint" id="binary-hint">Enter 0 or 1 per box, from bit 31 to bit 0, then click translate. Four bits = one hex digit.</p>
       <div id="bit-groups" class="bit-groups" role="group" aria-label="32-bit instruction" aria-describedby="binary-hint"></div>
       <div class="actions"><button id="translate">translate</button><button id="reset">reset</button></div>
@@ -160,7 +156,7 @@
       <pre id="binary-output" role="status" aria-live="polite" aria-labelledby="binary-output-label">Fill all 32 bits and click translate.</pre>
     </section>
     <section class="radix-converter" aria-labelledby="radix-title">
-      <h2 id="radix-title">7. 32-bit Base Converter</h2>
+      <h2 id="radix-title">32-bit Base Converter</h2>
       <p class="hint" id="radix-hint">Unsigned: 0-4294967295. Edit any field, then click Convert. The last edited field is the source.</p>
       <div class="radix-row">
         <label for="radix-hex">Hex</label>
@@ -220,13 +216,6 @@
       for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
       return bytes;
     }
-    function parseAddress(text) {
-      const value = text.trim();
-      if (!value) throw new Error('Enter an address first.');
-      if (/^0x[0-9a-f]+$/i.test(value)) return Number.parseInt(value.slice(2), 16);
-      if (/^[0-9]+$/i.test(value)) return Number.parseInt(value, 10);
-      throw new Error('Address must be decimal digits or hexadecimal with 0x prefix.');
-    }
     const memoryViewState = { byteLength: 0, rows: new Map(), layout: null, highlightRanges: null };
     function scrollMemoryRow(row) {
       const viewport = $('memory-layout-viewport');
@@ -261,7 +250,6 @@
       memoryUploadState.contentBase64 = '';
       $('memory-file').value = '';
       $('memory-source-path').value = '';
-      $('memory-jump-address').value = '';
       $('memory-view').value = 'module';
       setMemoryModuleOptions([]);
       display('memory-layout-output', message);
@@ -271,21 +259,8 @@
       memoryUploadState.filename = filename;
       memoryUploadState.contentBase64 = contentBase64;
       $('memory-source-path').value = sourcePath || filename;
-      $('memory-jump-address').value = '';
       display('memory-layout-output', `Loaded source: ${sourcePath || filename}\nSelect module/preview bytes, then click "inspect memory layout".`);
       clearMemoryView('File loaded. Click "inspect memory layout".');
-    }
-    function jumpToAddress() {
-      const address = parseAddress($('memory-jump-address').value);
-      if (!memoryViewState.byteLength) throw new Error('Inspect memory layout first.');
-      if (!Number.isInteger(address) || address < 0 || address >= memoryViewState.byteLength) {
-        throw new Error(`Address must be within preview range 0-${memoryViewState.byteLength - 1}.`);
-      }
-      const rowAddress = address - (address % 16);
-      const row = memoryViewState.rows.get(rowAddress);
-      if (!row) throw new Error('Address row is unavailable in current preview.');
-      scrollMemoryRow(row);
-      $('memory-layout-status').textContent = `Jumped to 0x${address.toString(16)} (row 0x${rowAddress.toString(16)}).`;
     }
     function renderByteLayout({ bytes, ranges, readyMessage, emptyMessage }) {
       const viewport = $('memory-layout-viewport');
@@ -466,7 +441,7 @@
         renderByteLayout({
           bytes,
           ranges,
-          readyMessage: 'Linear memory view ready. Click a segment chip to focus and jump, or use address jump.',
+          readyMessage: 'Linear memory view ready. Click a segment chip to focus.',
           emptyMessage: 'No linear memory preview is available. Select Module binary to inspect the file bytes.',
         });
         return;
@@ -493,7 +468,7 @@
         renderByteLayout({
           bytes,
           ranges,
-          readyMessage: `Module binary: ${bytes.length} bytes. Addresses are file offsets, not linear memory addresses. Click a section to focus and jump.`,
+          readyMessage: `Module binary: ${bytes.length} bytes. Addresses are file offsets, not linear memory addresses. Click a section to focus.`,
           emptyMessage: 'Module byte view is unavailable for this file.',
         });
         return;
@@ -515,7 +490,7 @@
       try {
         loaded = await api('memory-load-source', { source });
       } catch (error) {
-        autoLoadWarning = `\nNote: section 3 auto-load is unavailable (${error.message}). You can still use section 3 by selecting a file and clicking "upload".`;
+        autoLoadWarning = `\nNote: WAST Memory Layout Explorer auto-load is unavailable (${error.message}). You can still use it by selecting a file and clicking "upload".`;
       }
       $('module').replaceChildren(...result.modules.map(name => new Option(name, name)));
       if (!result.modules.length) $('module').add(new Option('No modules generated for disassembly', ''));
@@ -551,7 +526,7 @@
     });
     bind('memory-layout', 'memory-layout-output', async () => {
       if (!memoryUploadState.filename || !memoryUploadState.contentBase64) {
-        throw new Error('Load a file first: click "upload" in section 3, or run wast2json to auto-load the same source.');
+        throw new Error('Load a file first: click "upload" in WAST Memory Layout Explorer, or run wast2json to auto-load the same source.');
       }
       const moduleIndex = Number.parseInt($('memory-module').value, 10);
       const maxBytes = Number.parseInt($('memory-bytes').value, 10);
@@ -589,7 +564,6 @@
       renderMemoryLayout(layout);
     });
     $('memory-view').addEventListener('change', () => {
-      $('memory-jump-address').value = '';
       if (memoryViewState.layout) renderMemoryLayout(memoryViewState.layout);
     });
     $('memory-file').addEventListener('change', () => {
@@ -618,18 +592,6 @@
     });
     $('memory-reset').addEventListener('click', () => {
       clearMemoryUpload();
-    });
-    $('memory-jump-go').addEventListener('click', () => {
-      try {
-        jumpToAddress();
-      } catch (error) {
-        $('memory-layout-status').textContent = error.message;
-      }
-    });
-    $('memory-jump-address').addEventListener('keydown', event => {
-      if (event.key !== 'Enter') return;
-      event.preventDefault();
-      $('memory-jump-go').click();
     });
     const radixFields = ['hex', 'decimal', 'binary'];
     function parseRadix(value, base) {
@@ -698,13 +660,14 @@
         input.pattern = '[01]';
         input.autocomplete = 'off';
         input.setAttribute('aria-label', `Bit ${bit}`);
+        input.value = '0';
         label.append(input);
         group.append(label);
       }
       const output = document.createElement('output');
       output.className = 'nibble-hex';
       output.setAttribute('aria-label', `Hexadecimal for bits ${high} to ${high - 3}`);
-      output.textContent = '-';
+      output.textContent = '0';
       nibbleOutputs.push(output);
       group.append(output);
       $('bit-groups').append(group);
@@ -745,6 +708,7 @@
     if (location.protocol === 'file:') {
       display('convert-output', 'Run node tooling/server.mjs, then open http://127.0.0.1:1818. Opening the HTML file directly cannot invoke local commands.', true);
     }
+    display('binary-output', '0x00000000');
     clearMemoryUpload('Select a file and click "upload", or run wast2json to auto-load the same source.');
   </script>
 </body>

@@ -42,7 +42,7 @@ Keep all commands on PATH. No npm packages, Python, QEMU, or ARM64 hardware requ
 
 | Tool / button | Sample input | Result |
 | --- | --- | --- |
-| **wast2json** | `Chapter02/local.wast` | `.json` and numbered `.wasm` files |
+| **wast2json** | `sample.wast` | `.json` and numbered `.wasm` files |
 | **wasm-objdump** | Select a module or enter a Wasm path/URL | Disassembly and details (`-d -x`) |
 | **assembler** | `sub sp, sp, #0x10` | `0xD10043FFU`; bytes `FF 43 00 D1` |
 | **disassembler** | `0xD10043FFU` | AArch64 disassembly; bytes `FF 43 00 D1` |
@@ -66,12 +66,13 @@ Upload WAST/WAT/WASM ───────────────────�
 - **Module binary** is the default even when the module defines memory: offsets refer to the Wasm file (starting with `00 61 73 6D 01 00 00 00`), not runtime memory. The right pane shows WAT decoded from the selected binary.
 - Click a decoded WAT line (or focus it and use Enter/Space or Up/Down) to highlight and scroll to its corresponding file bytes. Type/import/table/memory/export declarations and function headers/instructions have entry/instruction mappings; other declarations are explicitly labeled **section-level**. Unmapped formatting lines report that no separate range is available. For example, `(memory ... 200 200)` in a single-memory module selects `01 01 C8 01 C8 01`, not the section ID/size header. This maps decoded WAT, not original WAST comments, whitespace, or script assertions.
 - **Linear memory** shows only static data initialization and zero-filled bytes, not execution results. Its addresses and length are independent of file offsets.
-- **Reference-style LEB128 size padding** is enabled by default for explorer WAST/WAT compilation to match the reference site's five-byte size fields. Disable it and re-inspect for compact encoding. This does not change section 1 conversion, and uploaded `.wasm` files are always shown byte-for-byte unchanged.
-- The byte view has a sticky **Address / 00-0F / ASCII** header and a pinned address column when scrolling horizontally. Address jumps and section/segment navigation keep the target row below the header.
+- **Reference-style LEB128 size padding** is enabled by default for explorer WAST/WAT compilation to match the reference site's five-byte size fields. Disable it and re-inspect for compact encoding. This does not change **wast2json** conversion, and uploaded `.wasm` files are always shown byte-for-byte unchanged.
+- The byte view has a sticky **Address / 00-0F / ASCII** header and a pinned address column when scrolling horizontally. Section/segment navigation keeps the target row below the header.
 
-- In section 3 (below wast2json and wasm-objdump), selecting a file does not load content immediately; click **upload** to load it.
-- Click **reset** to clear section 3 file state, module options, memory view, and jump state.
-- Running **wast2json** in section 1 now auto-loads the same source file into section 3 by default.
+- **wast2json** starts with an empty source path field.
+- In **WAST Memory Layout Explorer**, selecting a file does not load content immediately; click **upload** to load it.
+- Click **reset** to clear **WAST Memory Layout Explorer** file state, module options, and memory view.
+- Running **wast2json** now auto-loads the same source file into **WAST Memory Layout Explorer** by default.
 
 Absolute paths, project-relative paths, and HTTP(S) URLs are supported, including multi-module WAST.
 Local conversion may overwrite outputs beside the source; remote files use temporary storage cleaned up on normal exit.
